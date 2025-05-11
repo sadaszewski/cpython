@@ -4055,17 +4055,22 @@ static int
 codegen_call_pipeline(compiler *c, expr_ty e, expr_ty pipeline_lhs)
 {
     RETURN_IF_ERROR(codegen_validate_keywords(c, e->v.Call.keywords));
-    int ret = maybe_optimize_method_call(c, e);
-    if (ret < 0) {
-        return ERROR;
-    }
-    if (ret == 1) {
-        return SUCCESS;
+    int ret;
+    if (pipeline_lhs == NULL) {
+        ret = maybe_optimize_method_call(c, e);
+        if (ret < 0) {
+            return ERROR;
+        }
+        if (ret == 1) {
+            return SUCCESS;
+        }
     }
     NEW_JUMP_TARGET_LABEL(c, skip_normal_call);
     RETURN_IF_ERROR(check_caller(c, e->v.Call.func));
     VISIT(c, expr, e->v.Call.func);
-    RETURN_IF_ERROR(maybe_optimize_function_call(c, e, skip_normal_call));
+    if (pipeline_lhs == NULL) {
+        RETURN_IF_ERROR(maybe_optimize_function_call(c, e, skip_normal_call));
+    }
     location loc = LOC(e->v.Call.func);
     ADDOP(c, loc, PUSH_NULL);
     loc = LOC(e);

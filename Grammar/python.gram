@@ -837,8 +837,8 @@ factor[expr_ty] (memo):
     | pipeline
 
 pipeline[expr_ty]:
-    | pipeline '|>' primary { _PyAST_BinOp(a, Pipeline, b, EXTRA) }
-    | power '|>' primary { _PyAST_BinOp(a, Pipeline, b, EXTRA) }
+    | a=pipeline '|>' b=primary { _PyAST_BinOp(a, Pipeline, b, EXTRA) }
+    | a=power '|>' b=primary { _PyAST_BinOp(a, Pipeline, b, EXTRA) }
     | power
 
 power[expr_ty]:

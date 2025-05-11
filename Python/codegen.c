@@ -218,10 +218,13 @@ static int codegen_call_helper_impl(compiler *c, location loc,
                                     int n, /* Args already pushed */
                                     asdl_expr_seq *args,
                                     PyObject *injected_arg,
-                                    asdl_keyword_seq *keywords);
+                                    asdl_keyword_seq *keywords,
+                                    expr_ty pipeline_lhs);
 static int codegen_call_helper(compiler *c, location loc,
                                int n, asdl_expr_seq *args,
                                asdl_keyword_seq *keywords);
+static int codegen_call_pipeline(compiler *c, expr_ty e,
+                                 expr_ty pipeline_lhs);
 static int codegen_try_except(compiler *, stmt_ty);
 static int codegen_try_star_except(compiler *, stmt_ty);
 
@@ -1667,7 +1670,8 @@ codegen_class(compiler *c, stmt_ty s)
         RETURN_IF_ERROR_IN_SCOPE(c, codegen_call_helper_impl(c, loc, 2,
                                                              s->v.ClassDef.bases,
                                                              &_Py_STR(generic_base),
-                                                             s->v.ClassDef.keywords));
+                                                             s->v.ClassDef.keywords,
+                                                             NULL));
 
         PyCodeObject *co = _PyCompile_OptimizeAndAssemble(c, 0);
 
@@ -3312,10 +3316,24 @@ codegen_boolop(compiler *c, expr_ty e)
     return SUCCESS;
 }
 
+#define HANDLE_PIPELINE_LHS(pipeline_lhs_consumed) \
+    if (pipeline_lhs != NULL && elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_")) { \
+        if ((pipeline_lhs_consumed)) { \
+            PyErr_Format(PyExc_SyntaxError, "Too many pipeline LHS placehoders on the RHS"); \
+            return ERROR; \
+        } \
+        (pipeline_lhs_consumed) = true; \
+        VISIT(c, expr, pipeline_lhs); \
+    } else { \
+        VISIT(c, expr, elt); \
+    }
+
 static int
 starunpack_helper_impl(compiler *c, location loc,
                        asdl_expr_seq *elts, PyObject *injected_arg, int pushed,
-                       int build, int add, int extend, int tuple)
+                       int build, int add, int extend, int tuple,
+                       expr_ty pipeline_lhs, bool *pipeline_lhs_consumed,
+                       bool inject_pipeline_lhs)
 {
     Py_ssize_t n = asdl_seq_LEN(elts);
     int big = n + pushed + (injected_arg ? 1 : 0) > _PY_STACK_USE_GUIDELINE;
@@ -3330,7 +3348,11 @@ starunpack_helper_impl(compiler *c, location loc,
     if (!seen_star && !big) {
         for (Py_ssize_t i = 0; i < n; i++) {
             expr_ty elt = asdl_seq_GET(elts, i);
-            VISIT(c, expr, elt);
+            HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
+        }
+        if (inject_pipeline_lhs) {
+            VISIT(c, expr, pipeline_lhs);
+            n++;
         }
         if (injected_arg) {
             RETURN_IF_ERROR(codegen_nameop(c, loc, injected_arg, Load));
@@ -3359,13 +3381,17 @@ starunpack_helper_impl(compiler *c, location loc,
             ADDOP_I(c, loc, extend, 1);
         }
         else {
-            VISIT(c, expr, elt);
+            HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
             if (sequence_built) {
                 ADDOP_I(c, loc, add, 1);
             }
         }
     }
     assert(sequence_built);
+    if (inject_pipeline_lhs) {
+        VISIT(c, expr, pipeline_lhs);
+        ADDOP_I(c, loc, add, 1);
+    }
     if (injected_arg) {
         RETURN_IF_ERROR(codegen_nameop(c, loc, injected_arg, Load));
         ADDOP_I(c, loc, add, 1);
@@ -3382,7 +3408,8 @@ starunpack_helper(compiler *c, location loc,
                   int build, int add, int extend, int tuple)
 {
     return starunpack_helper_impl(c, loc, elts, NULL, pushed,
-                                  build, add, extend, tuple);
+                                  build, add, extend, tuple,
+                                  NULL, NULL, false);
 }
 
 static int
@@ -4025,7 +4052,7 @@ codegen_validate_keywords(compiler *c, asdl_keyword_seq *keywords)
 }
 
 static int
-codegen_call(compiler *c, expr_ty e)
+codegen_call_pipeline(compiler *c, expr_ty e, expr_ty pipeline_lhs)
 {
     RETURN_IF_ERROR(codegen_validate_keywords(c, e->v.Call.keywords));
     int ret = maybe_optimize_method_call(c, e);
@@ -4042,11 +4069,17 @@ codegen_call(compiler *c, expr_ty e)
     location loc = LOC(e->v.Call.func);
     ADDOP(c, loc, PUSH_NULL);
     loc = LOC(e);
-    ret = codegen_call_helper(c, loc, 0,
+    ret = codegen_call_helper_impl(c, loc, 0,
                               e->v.Call.args,
-                              e->v.Call.keywords);
+                              NULL,
+                              e->v.Call.keywords,
+                              pipeline_lhs);
     USE_LABEL(c, skip_normal_call);
     return ret;
+}
+
+static int codegen_call(compiler *c, expr_ty e) {
+    return codegen_call_pipeline(c, e, NULL);
 }
 
 static int
@@ -4198,7 +4231,8 @@ codegen_formatted_value(compiler *c, expr_ty e)
 static int
 codegen_subkwargs(compiler *c, location loc,
                   asdl_keyword_seq *keywords,
-                  Py_ssize_t begin, Py_ssize_t end)
+                  Py_ssize_t begin, Py_ssize_t end,
+                  expr_ty pipeline_lhs, bool *pipeline_lhs_consumed)
 {
     Py_ssize_t i, n = end - begin;
     keyword_ty kw;
@@ -4210,7 +4244,8 @@ codegen_subkwargs(compiler *c, location loc,
     for (i = begin; i < end; i++) {
         kw = asdl_seq_GET(keywords, i);
         ADDOP_LOAD_CONST(c, loc, kw->arg);
-        VISIT(c, expr, kw->value);
+        expr_ty elt = kw->value;
+        HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
         if (big) {
             ADDOP_I(c, NO_LOCATION, MAP_ADD, 1);
         }
@@ -4241,15 +4276,21 @@ codegen_call_simple_kw_helper(compiler *c, location loc,
     return SUCCESS;
 }
 
+#define IS_PIPELINE_LHS_PLACEHOLDER(elt) \
+    (elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_"))
+
 /* shared code between codegen_call and codegen_class */
 static int
 codegen_call_helper_impl(compiler *c, location loc,
                          int n, /* Args already pushed */
                          asdl_expr_seq *args,
                          PyObject *injected_arg,
-                         asdl_keyword_seq *keywords)
+                         asdl_keyword_seq *keywords,
+                         expr_ty pipeline_lhs)
 {
     Py_ssize_t i, nseen, nelts, nkwelts;
+    bool pipeline_lhs_consumed = false;
+    bool inject_pipeline_lhs = false;
 
     RETURN_IF_ERROR(codegen_validate_keywords(c, keywords));
 
@@ -4259,10 +4300,14 @@ codegen_call_helper_impl(compiler *c, location loc,
     if (nelts + nkwelts*2 > _PY_STACK_USE_GUIDELINE) {
          goto ex_call;
     }
+    nseen = 0;
     for (i = 0; i < nelts; i++) {
         expr_ty elt = asdl_seq_GET(args, i);
         if (elt->kind == Starred_kind) {
             goto ex_call;
+        }
+        if (IS_PIPELINE_LHS_PLACEHOLDER(elt)) {
+            nseen++;
         }
     }
     for (i = 0; i < nkwelts; i++) {
@@ -4270,20 +4315,34 @@ codegen_call_helper_impl(compiler *c, location loc,
         if (kw->arg == NULL) {
             goto ex_call;
         }
+        if (IS_PIPELINE_LHS_PLACEHOLDER(kw->value)) {
+            nseen++;
+        }
+    }
+    if (nseen == 0) {
+        inject_pipeline_lhs = true;
     }
 
     /* No * or ** args, so can use faster calling sequence */
     for (i = 0; i < nelts; i++) {
         expr_ty elt = asdl_seq_GET(args, i);
         assert(elt->kind != Starred_kind);
-        VISIT(c, expr, elt);
+        HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
+    }
+    if (inject_pipeline_lhs) {
+        VISIT(c, expr, pipeline_lhs);
+        nelts++;
     }
     if (injected_arg) {
         RETURN_IF_ERROR(codegen_nameop(c, loc, injected_arg, Load));
         nelts++;
     }
     if (nkwelts) {
-        VISIT_SEQ(c, keyword, keywords);
+        for (i = 0; i < nkwelts; i++) {
+            keyword_ty kw = asdl_seq_GET(keywords, i);
+            expr_ty elt = kw->value;
+            HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
+        }
         RETURN_IF_ERROR(
             codegen_call_simple_kw_helper(c, loc, keywords, nkwelts));
         ADDOP_I(c, loc, CALL_KW, n + nelts + nkwelts);
@@ -4301,7 +4360,9 @@ ex_call:
     }
     else {
         RETURN_IF_ERROR(starunpack_helper_impl(c, loc, args, injected_arg, n,
-                                               BUILD_LIST, LIST_APPEND, LIST_EXTEND, 1));
+                                               BUILD_LIST, LIST_APPEND, LIST_EXTEND, 1,
+                                               pipeline_lhs, &pipeline_lhs_consumed,
+                                               inject_pipeline_lhs));
     }
     /* Then keyword arguments */
     if (nkwelts) {
@@ -4314,7 +4375,8 @@ ex_call:
             if (kw->arg == NULL) {
                 /* A keyword argument unpacking. */
                 if (nseen) {
-                    RETURN_IF_ERROR(codegen_subkwargs(c, loc, keywords, i - nseen, i));
+                    RETURN_IF_ERROR(codegen_subkwargs(c, loc, keywords, i - nseen, i,
+                                                      pipeline_lhs, &pipeline_lhs_consumed));
                     if (have_dict) {
                         ADDOP_I(c, loc, DICT_MERGE, 1);
                     }
@@ -4334,7 +4396,8 @@ ex_call:
         }
         if (nseen) {
             /* Pack up any trailing keyword arguments. */
-            RETURN_IF_ERROR(codegen_subkwargs(c, loc, keywords, nkwelts - nseen, nkwelts));
+            RETURN_IF_ERROR(codegen_subkwargs(c, loc, keywords, nkwelts - nseen, nkwelts,
+                                              pipeline_lhs, &pipeline_lhs_consumed));
             if (have_dict) {
                 ADDOP_I(c, loc, DICT_MERGE, 1);
             }
@@ -4355,7 +4418,7 @@ codegen_call_helper(compiler *c, location loc,
                     asdl_expr_seq *args,
                     asdl_keyword_seq *keywords)
 {
-    return codegen_call_helper_impl(c, loc, n, args, NULL, keywords);
+    return codegen_call_helper_impl(c, loc, n, args, NULL, keywords, NULL);
 }
 
 /* List and set comprehensions work by being inlined at the location where
@@ -5186,9 +5249,17 @@ codegen_visit_expr(compiler *c, expr_ty e)
     case BoolOp_kind:
         return codegen_boolop(c, e);
     case BinOp_kind:
-        VISIT(c, expr, e->v.BinOp.left);
-        VISIT(c, expr, e->v.BinOp.right);
-        ADDOP_BINARY(c, loc, e->v.BinOp.op);
+        if (e->v.BinOp.op == Pipeline) {
+            if (e->v.BinOp.right->kind != Call_kind) {
+                PyErr_Format(PyExc_SyntaxError, "RHS of a pipeline must be a call");
+                return ERROR;
+            }
+            return codegen_call_pipeline(c, e->v.BinOp.right, e->v.BinOp.left);
+        } else {
+            VISIT(c, expr, e->v.BinOp.left);
+            VISIT(c, expr, e->v.BinOp.right);
+            ADDOP_BINARY(c, loc, e->v.BinOp.op);
+        }
         break;
     case UnaryOp_kind:
         VISIT(c, expr, e->v.UnaryOp.operand);

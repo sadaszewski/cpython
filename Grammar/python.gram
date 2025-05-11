@@ -834,6 +834,11 @@ factor[expr_ty] (memo):
     | '+' a=factor { _PyAST_UnaryOp(UAdd, a, EXTRA) }
     | '-' a=factor { _PyAST_UnaryOp(USub, a, EXTRA) }
     | '~' a=factor { _PyAST_UnaryOp(Invert, a, EXTRA) }
+    | pipeline
+
+pipeline[expr_ty]:
+    | pipeline '|>' primary { _PyAST_BinOp(a, Pipeline, b, EXTRA) }
+    | power '|>' primary { _PyAST_BinOp(a, Pipeline, b, EXTRA) }
     | power
 
 power[expr_ty]:

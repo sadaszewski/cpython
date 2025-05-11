@@ -4297,17 +4297,30 @@ codegen_call_helper_impl(compiler *c, location loc,
     nelts = asdl_seq_LEN(args);
     nkwelts = asdl_seq_LEN(keywords);
 
+    nseen = 0;
+    for (i = 0; i < nelts; i++) {
+        expr_ty elt = asdl_seq_GET(args, i);
+        if (IS_PIPELINE_LHS_PLACEHOLDER(elt)) {
+            nseen++;
+        }
+    }
+    for (i = 0; i < nkwelts; i++) {
+        keyword_ty kw = asdl_seq_GET(keywords, i);
+        if (IS_PIPELINE_LHS_PLACEHOLDER(kw->value)) {
+            nseen++;
+        }
+    }
+    if (nseen == 0) {
+        inject_pipeline_lhs = true;
+    }
+
     if (nelts + nkwelts*2 > _PY_STACK_USE_GUIDELINE) {
          goto ex_call;
     }
-    nseen = 0;
     for (i = 0; i < nelts; i++) {
         expr_ty elt = asdl_seq_GET(args, i);
         if (elt->kind == Starred_kind) {
             goto ex_call;
-        }
-        if (IS_PIPELINE_LHS_PLACEHOLDER(elt)) {
-            nseen++;
         }
     }
     for (i = 0; i < nkwelts; i++) {
@@ -4315,12 +4328,6 @@ codegen_call_helper_impl(compiler *c, location loc,
         if (kw->arg == NULL) {
             goto ex_call;
         }
-        if (IS_PIPELINE_LHS_PLACEHOLDER(kw->value)) {
-            nseen++;
-        }
-    }
-    if (nseen == 0) {
-        inject_pipeline_lhs = true;
     }
 
     /* No * or ** args, so can use faster calling sequence */

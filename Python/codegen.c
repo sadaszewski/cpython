@@ -3350,7 +3350,7 @@ starunpack_helper_impl(compiler *c, location loc,
             expr_ty elt = asdl_seq_GET(elts, i);
             HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
         }
-        if (inject_pipeline_lhs) {
+        if (pipeline_lhs != NULL && inject_pipeline_lhs) {
             VISIT(c, expr, pipeline_lhs);
             n++;
         }
@@ -3388,7 +3388,7 @@ starunpack_helper_impl(compiler *c, location loc,
         }
     }
     assert(sequence_built);
-    if (inject_pipeline_lhs) {
+    if (pipeline_lhs != NULL && inject_pipeline_lhs) {
         VISIT(c, expr, pipeline_lhs);
         ADDOP_I(c, loc, add, 1);
     }
@@ -4329,7 +4329,7 @@ codegen_call_helper_impl(compiler *c, location loc,
         assert(elt->kind != Starred_kind);
         HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
     }
-    if (inject_pipeline_lhs) {
+    if (pipeline_lhs != NULL && inject_pipeline_lhs) {
         VISIT(c, expr, pipeline_lhs);
         nelts++;
     }

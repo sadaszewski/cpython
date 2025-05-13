@@ -5268,8 +5268,9 @@ compiler_call_helper_impl(struct compiler *c, location loc,
             nseen++;
         }
     }
-    if (nseen == 0) {
+    if (nseen == 0 && !pipeline_lhs_consumed) {
         inject_pipeline_lhs = true;
+        pipeline_lhs_consumed = true;
     }
 
     if (nelts + nkwelts*2 > STACK_USE_GUIDELINE) {

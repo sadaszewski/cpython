@@ -1,4 +1,4 @@
-This repository holds a pipeline operator implementation.
+This repository holds a pipeline operator implementation for Python.
 
 See: [here](https://sadaszewski.github.io/python-pipeline-operator/dist/console.html) for Pyodide-based demonstration directly in the browser.
 

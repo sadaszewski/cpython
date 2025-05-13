@@ -8,6 +8,8 @@ The syntax is the following:
 [1, 2, 3] |> map(str) |> ", ".join() |> _.split()
 ```
 
+The _ plays again its role of a soft keyword here and acts as a placeholder to indicate where to insert the results of the LHS into the RHS. If no placeholder is placed, the LHS is injected as the LAST argument. This plays better with existing Python functions. The RHS must be a call.
+
 Can pass the placeholder by position:
 
 ```python

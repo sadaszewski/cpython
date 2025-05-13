@@ -24,4 +24,4 @@ Or keyword:
 5 |> sum([1, 2, 3, 4, 5], start=_)
 ```
 
-Only one placeholder is allowed!
+Only one placeholder is allowed, since everything happens on the stack!

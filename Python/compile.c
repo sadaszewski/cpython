@@ -351,7 +351,8 @@ static int compiler_call_helper_impl(struct compiler *c, location loc,
                                 int n, asdl_expr_seq *args,
                                 PyObject *injected_arg,
                                 asdl_keyword_seq *keywords,
-                                expr_ty pipeline_lhs);
+                                expr_ty pipeline_lhs,
+                                bool pipeline_lhs_consumed);
 static int compiler_call_helper(struct compiler *c, location loc,
                                 int n, asdl_expr_seq *args,
                                 asdl_keyword_seq *keywords);
@@ -5095,7 +5096,8 @@ compiler_call_pipeline(struct compiler *c, expr_ty e, expr_ty pipeline_lhs)
                               e->v.Call.args,
                               NULL,
                               e->v.Call.keywords,
-                              pipeline_lhs);
+                              pipeline_lhs,
+                              false);
     USE_LABEL(c, skip_normal_call);
     return ret;
 }
@@ -5242,10 +5244,10 @@ compiler_call_helper_impl(struct compiler *c, location loc,
                          asdl_expr_seq *args,
                          PyObject *injected_arg,
                          asdl_keyword_seq *keywords,
-                         expr_ty pipeline_lhs)
+                         expr_ty pipeline_lhs,
+                         bool pipeline_lhs_consumed)
 {
     Py_ssize_t i, nseen, nelts, nkwelts;
-    bool pipeline_lhs_consumed = false;
     bool inject_pipeline_lhs = false;
 
     RETURN_IF_ERROR(validate_keywords(c, keywords));
@@ -5380,7 +5382,7 @@ static int compiler_call_helper(struct compiler *c, location loc,
                      asdl_expr_seq *args,
                      asdl_keyword_seq *keywords)
 {
-    return compiler_call_helper_impl(c, loc, n, args, NULL, keywords, NULL);
+    return compiler_call_helper_impl(c, loc, n, args, NULL, keywords, NULL, false);
 }
 
 
@@ -6297,7 +6299,7 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
                 ADDOP_NAME(c, loc, LOAD_METHOD, func->v.Attribute.attr, names);
                 asdl_expr_seq *args = e->v.BinOp.right->v.Call.args;
                 asdl_keyword_seq *keywords = e->v.BinOp.right->v.Call.keywords;
-                return compiler_call_helper_impl(c, loc, 0, args, NULL, keywords, NULL);
+                return compiler_call_helper_impl(c, loc, 0, args, NULL, keywords, e->v.BinOp.left, true);
             }
             return compiler_call_pipeline(c, e->v.BinOp.right, e->v.BinOp.left);
         } else {

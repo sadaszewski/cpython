@@ -347,9 +347,16 @@ static int compiler_call_simple_kw_helper(struct compiler *c,
                                           location loc,
                                           asdl_keyword_seq *keywords,
                                           Py_ssize_t nkwelts);
+static int compiler_call_helper_impl(struct compiler *c, location loc,
+                                int n, asdl_expr_seq *args,
+                                PyObject *injected_arg,
+                                asdl_keyword_seq *keywords,
+                                expr_ty pipeline_lhs);
 static int compiler_call_helper(struct compiler *c, location loc,
                                 int n, asdl_expr_seq *args,
                                 asdl_keyword_seq *keywords);
+static int compiler_call_pipeline(struct compiler *c, expr_ty e,
+                                 expr_ty pipeline_lhs);
 static int compiler_try_except(struct compiler *, stmt_ty);
 static int compiler_try_star_except(struct compiler *, stmt_ty);
 static int compiler_set_qualname(struct compiler *);
@@ -4393,42 +4400,27 @@ compiler_boolop(struct compiler *c, expr_ty e)
     return SUCCESS;
 }
 
-static int
-starunpack_helper(struct compiler *c, location loc,
-                  asdl_expr_seq *elts, int pushed,
-                  int build, int add, int extend, int tuple)
-{
-    Py_ssize_t n = asdl_seq_LEN(elts);
-    if (n > 2 && are_all_items_const(elts, 0, n)) {
-        PyObject *folded = PyTuple_New(n);
-        if (folded == NULL) {
-            return ERROR;
-        }
-        PyObject *val;
-        for (Py_ssize_t i = 0; i < n; i++) {
-            val = ((expr_ty)asdl_seq_GET(elts, i))->v.Constant.value;
-            PyTuple_SET_ITEM(folded, i, Py_NewRef(val));
-        }
-        if (tuple && !pushed) {
-            ADDOP_LOAD_CONST_NEW(c, loc, folded);
-        } else {
-            if (add == SET_ADD) {
-                Py_SETREF(folded, PyFrozenSet_New(folded));
-                if (folded == NULL) {
-                    return ERROR;
-                }
-            }
-            ADDOP_I(c, loc, build, pushed);
-            ADDOP_LOAD_CONST_NEW(c, loc, folded);
-            ADDOP_I(c, loc, extend, 1);
-            if (tuple) {
-                ADDOP_I(c, loc, CALL_INTRINSIC_1, INTRINSIC_LIST_TO_TUPLE);
-            }
-        }
-        return SUCCESS;
+#define HANDLE_PIPELINE_LHS(pipeline_lhs_consumed) \
+    if (pipeline_lhs != NULL && elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_")) { \
+        if ((pipeline_lhs_consumed)) { \
+            PyErr_Format(PyExc_SyntaxError, "Too many pipeline LHS placehoders on the RHS"); \
+            return ERROR; \
+        } \
+        (pipeline_lhs_consumed) = true; \
+        VISIT(c, expr, pipeline_lhs); \
+    } else { \
+        VISIT(c, expr, elt); \
     }
 
-    int big = n+pushed > STACK_USE_GUIDELINE;
+static int
+starunpack_helper_impl(struct compiler *c, location loc,
+                       asdl_expr_seq *elts, PyObject *injected_arg, int pushed,
+                       int build, int add, int extend, int tuple,
+                       expr_ty pipeline_lhs, bool *pipeline_lhs_consumed,
+                       bool inject_pipeline_lhs)
+{
+    Py_ssize_t n = asdl_seq_LEN(elts);
+    int big = n + pushed + (injected_arg ? 1 : 0) > STACK_USE_GUIDELINE;
     int seen_star = 0;
     for (Py_ssize_t i = 0; i < n; i++) {
         expr_ty elt = asdl_seq_GET(elts, i);
@@ -4440,7 +4432,15 @@ starunpack_helper(struct compiler *c, location loc,
     if (!seen_star && !big) {
         for (Py_ssize_t i = 0; i < n; i++) {
             expr_ty elt = asdl_seq_GET(elts, i);
-            VISIT(c, expr, elt);
+            HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
+        }
+        if (pipeline_lhs != NULL && inject_pipeline_lhs) {
+            VISIT(c, expr, pipeline_lhs);
+            n++;
+        }
+        if (injected_arg) {
+            RETURN_IF_ERROR(compiler_nameop(c, loc, injected_arg, Load));
+            n++;
         }
         if (tuple) {
             ADDOP_I(c, loc, BUILD_TUPLE, n+pushed);
@@ -4465,17 +4465,33 @@ starunpack_helper(struct compiler *c, location loc,
             ADDOP_I(c, loc, extend, 1);
         }
         else {
-            VISIT(c, expr, elt);
+            HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
             if (sequence_built) {
                 ADDOP_I(c, loc, add, 1);
             }
         }
     }
     assert(sequence_built);
+    if (pipeline_lhs != NULL && inject_pipeline_lhs) {
+        VISIT(c, expr, pipeline_lhs);
+        ADDOP_I(c, loc, add, 1);
+    }
+    if (injected_arg) {
+        RETURN_IF_ERROR(compiler_nameop(c, loc, injected_arg, Load));
+        ADDOP_I(c, loc, add, 1);
+    }
     if (tuple) {
         ADDOP_I(c, loc, CALL_INTRINSIC_1, INTRINSIC_LIST_TO_TUPLE);
     }
     return SUCCESS;
+}
+
+static int
+starunpack_helper(struct compiler *c, location loc,
+                  asdl_expr_seq *elts, int pushed,
+                  int build, int add, int extend, int tuple)
+{
+    return starunpack_helper_impl(c, loc, elts, NULL, pushed, build, add, extend, tuple, NULL, NULL, false);
 }
 
 static int
@@ -5053,24 +5069,41 @@ validate_keywords(struct compiler *c, asdl_keyword_seq *keywords)
 }
 
 static int
-compiler_call(struct compiler *c, expr_ty e)
+compiler_call_pipeline(struct compiler *c, expr_ty e, expr_ty pipeline_lhs)
 {
     RETURN_IF_ERROR(validate_keywords(c, e->v.Call.keywords));
-    int ret = maybe_optimize_method_call(c, e);
-    if (ret < 0) {
-        return ERROR;
+    int ret;
+    if (pipeline_lhs == NULL) {
+        ret = maybe_optimize_method_call(c, e);
+        if (ret < 0) {
+            return ERROR;
+        }
+        if (ret == 1) {
+            return SUCCESS;
+        }
     }
-    if (ret == 1) {
-        return SUCCESS;
-    }
+    NEW_JUMP_TARGET_LABEL(c, skip_normal_call);
     RETURN_IF_ERROR(check_caller(c, e->v.Call.func));
     VISIT(c, expr, e->v.Call.func);
+    //if (pipeline_lhs == NULL) {
+    //    RETURN_IF_ERROR(maybe_optimize_function_call(c, e, skip_normal_call));
+    //}
     location loc = LOC(e->v.Call.func);
     ADDOP(c, loc, PUSH_NULL);
     loc = LOC(e);
-    return compiler_call_helper(c, loc, 0,
-                                e->v.Call.args,
-                                e->v.Call.keywords);
+    ret = compiler_call_helper_impl(c, loc, 0,
+                              e->v.Call.args,
+                              NULL,
+                              e->v.Call.keywords,
+                              pipeline_lhs);
+    USE_LABEL(c, skip_normal_call);
+    return ret;
+}
+
+static int
+compiler_call(struct compiler *c, expr_ty e)
+{
+    return compiler_call_pipeline(c, e, NULL);
 }
 
 static int
@@ -5151,38 +5184,22 @@ compiler_formatted_value(struct compiler *c, expr_ty e)
 
 static int
 compiler_subkwargs(struct compiler *c, location loc,
-                   asdl_keyword_seq *keywords,
-                   Py_ssize_t begin, Py_ssize_t end)
+                  asdl_keyword_seq *keywords,
+                  Py_ssize_t begin, Py_ssize_t end,
+                  expr_ty pipeline_lhs, bool *pipeline_lhs_consumed)
 {
     Py_ssize_t i, n = end - begin;
     keyword_ty kw;
-    PyObject *keys, *key;
     assert(n > 0);
     int big = n*2 > STACK_USE_GUIDELINE;
-    if (n > 1 && !big) {
-        for (i = begin; i < end; i++) {
-            kw = asdl_seq_GET(keywords, i);
-            VISIT(c, expr, kw->value);
-        }
-        keys = PyTuple_New(n);
-        if (keys == NULL) {
-            return ERROR;
-        }
-        for (i = begin; i < end; i++) {
-            key = ((keyword_ty) asdl_seq_GET(keywords, i))->arg;
-            PyTuple_SET_ITEM(keys, i - begin, Py_NewRef(key));
-        }
-        ADDOP_LOAD_CONST_NEW(c, loc, keys);
-        ADDOP_I(c, loc, BUILD_CONST_KEY_MAP, n);
-        return SUCCESS;
-    }
     if (big) {
         ADDOP_I(c, NO_LOCATION, BUILD_MAP, 0);
     }
     for (i = begin; i < end; i++) {
         kw = asdl_seq_GET(keywords, i);
         ADDOP_LOAD_CONST(c, loc, kw->arg);
-        VISIT(c, expr, kw->value);
+        expr_ty elt = kw->value;
+        HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
         if (big) {
             ADDOP_I(c, NO_LOCATION, MAP_ADD, 1);
         }
@@ -5214,19 +5231,44 @@ compiler_call_simple_kw_helper(struct compiler *c, location loc,
 }
 
 
+#define IS_PIPELINE_LHS_PLACEHOLDER(elt) \
+    (elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_"))
+
+
 /* shared code between compiler_call and compiler_class */
 static int
-compiler_call_helper(struct compiler *c, location loc,
-                     int n, /* Args already pushed */
-                     asdl_expr_seq *args,
-                     asdl_keyword_seq *keywords)
+compiler_call_helper_impl(struct compiler *c, location loc,
+                         int n, /* Args already pushed */
+                         asdl_expr_seq *args,
+                         PyObject *injected_arg,
+                         asdl_keyword_seq *keywords,
+                         expr_ty pipeline_lhs)
 {
     Py_ssize_t i, nseen, nelts, nkwelts;
+    bool pipeline_lhs_consumed = false;
+    bool inject_pipeline_lhs = false;
 
     RETURN_IF_ERROR(validate_keywords(c, keywords));
 
     nelts = asdl_seq_LEN(args);
     nkwelts = asdl_seq_LEN(keywords);
+
+    nseen = 0;
+    for (i = 0; i < nelts; i++) {
+        expr_ty elt = asdl_seq_GET(args, i);
+        if (IS_PIPELINE_LHS_PLACEHOLDER(elt)) {
+            nseen++;
+        }
+    }
+    for (i = 0; i < nkwelts; i++) {
+        keyword_ty kw = asdl_seq_GET(keywords, i);
+        if (IS_PIPELINE_LHS_PLACEHOLDER(kw->value)) {
+            nseen++;
+        }
+    }
+    if (nseen == 0) {
+        inject_pipeline_lhs = true;
+    }
 
     if (nelts + nkwelts*2 > STACK_USE_GUIDELINE) {
          goto ex_call;
@@ -5248,10 +5290,22 @@ compiler_call_helper(struct compiler *c, location loc,
     for (i = 0; i < nelts; i++) {
         expr_ty elt = asdl_seq_GET(args, i);
         assert(elt->kind != Starred_kind);
-        VISIT(c, expr, elt);
+        HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
+    }
+    if (pipeline_lhs != NULL && inject_pipeline_lhs) {
+        VISIT(c, expr, pipeline_lhs);
+        nelts++;
+    }
+    if (injected_arg) {
+        RETURN_IF_ERROR(compiler_nameop(c, loc, injected_arg, Load));
+        nelts++;
     }
     if (nkwelts) {
-        VISIT_SEQ(c, keyword, keywords);
+        for (i = 0; i < nkwelts; i++) {
+            keyword_ty kw = asdl_seq_GET(keywords, i);
+            expr_ty elt = kw->value;
+            HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
+        }
         RETURN_IF_ERROR(
             compiler_call_simple_kw_helper(c, loc, keywords, nkwelts));
         ADDOP_I(c, loc, CALL_KW, n + nelts + nkwelts);
@@ -5264,12 +5318,14 @@ compiler_call_helper(struct compiler *c, location loc,
 ex_call:
 
     /* Do positional arguments. */
-    if (n ==0 && nelts == 1 && ((expr_ty)asdl_seq_GET(args, 0))->kind == Starred_kind) {
+    if (n == 0 && nelts == 1 && ((expr_ty)asdl_seq_GET(args, 0))->kind == Starred_kind) {
         VISIT(c, expr, ((expr_ty)asdl_seq_GET(args, 0))->v.Starred.value);
     }
     else {
-        RETURN_IF_ERROR(starunpack_helper(c, loc, args, n, BUILD_LIST,
-                                          LIST_APPEND, LIST_EXTEND, 1));
+        RETURN_IF_ERROR(starunpack_helper_impl(c, loc, args, injected_arg, n,
+                                               BUILD_LIST, LIST_APPEND, LIST_EXTEND, 1,
+                                               pipeline_lhs, &pipeline_lhs_consumed,
+                                               inject_pipeline_lhs));
     }
     /* Then keyword arguments */
     if (nkwelts) {
@@ -5282,7 +5338,8 @@ ex_call:
             if (kw->arg == NULL) {
                 /* A keyword argument unpacking. */
                 if (nseen) {
-                    RETURN_IF_ERROR(compiler_subkwargs(c, loc, keywords, i - nseen, i));
+                    RETURN_IF_ERROR(compiler_subkwargs(c, loc, keywords, i - nseen, i,
+                                                      pipeline_lhs, &pipeline_lhs_consumed));
                     if (have_dict) {
                         ADDOP_I(c, loc, DICT_MERGE, 1);
                     }
@@ -5302,7 +5359,8 @@ ex_call:
         }
         if (nseen) {
             /* Pack up any trailing keyword arguments. */
-            RETURN_IF_ERROR(compiler_subkwargs(c, loc, keywords, nkwelts - nseen, nkwelts));
+            RETURN_IF_ERROR(compiler_subkwargs(c, loc, keywords, nkwelts - nseen, nkwelts,
+                                              pipeline_lhs, &pipeline_lhs_consumed));
             if (have_dict) {
                 ADDOP_I(c, loc, DICT_MERGE, 1);
             }
@@ -5310,8 +5368,19 @@ ex_call:
         }
         assert(have_dict);
     }
+    //if (nkwelts == 0) {
+    //    ADDOP(c, loc, PUSH_NULL);
+    //}
     ADDOP_I(c, loc, CALL_FUNCTION_EX, nkwelts > 0);
     return SUCCESS;
+}
+
+static int compiler_call_helper(struct compiler *c, location loc,
+                     int n, /* Args already pushed */
+                     asdl_expr_seq *args,
+                     asdl_keyword_seq *keywords)
+{
+    return compiler_call_helper_impl(c, loc, n, args, NULL, keywords, NULL);
 }
 
 
@@ -6213,9 +6282,17 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
     case BoolOp_kind:
         return compiler_boolop(c, e);
     case BinOp_kind:
-        VISIT(c, expr, e->v.BinOp.left);
-        VISIT(c, expr, e->v.BinOp.right);
-        ADDOP_BINARY(c, loc, e->v.BinOp.op);
+        if (e->v.BinOp.op == Pipeline) {
+            if (e->v.BinOp.right->kind != Call_kind) {
+                PyErr_Format(PyExc_SyntaxError, "RHS of a pipeline must be a call");
+                return ERROR;
+            }
+            return compiler_call_pipeline(c, e->v.BinOp.right, e->v.BinOp.left);
+        } else {
+            VISIT(c, expr, e->v.BinOp.left);
+            VISIT(c, expr, e->v.BinOp.right);
+            ADDOP_BINARY(c, loc, e->v.BinOp.op);
+        }
         break;
     case UnaryOp_kind:
         VISIT(c, expr, e->v.UnaryOp.operand);

@@ -99,7 +99,7 @@ module Python
 
     boolop = And | Or
 
-    operator = Add | Sub | Mult | MatMult | Div | Mod | Pow | LShift
+    operator = Add | Sub | Mult | MatMult | Div | Mod | Pipeline | Pow | LShift
                  | RShift | BitOr | BitXor | BitAnd | FloorDiv
 
     unaryop = Invert | Not | UAdd | USub

@@ -6287,6 +6287,18 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
                 PyErr_Format(PyExc_SyntaxError, "RHS of a pipeline must be a call");
                 return ERROR;
             }
+            expr_ty func = e->v.BinOp.right->v.Call.func;
+            if (func->kind == Attribute_kind &&
+                func->v.Attribute.ctx == Load &&
+                func->v.Attribute.value->kind == Name_kind &&
+                _PyUnicode_EqualToASCIIString(func->v.Attribute.value->v.Name.id, "_")) {
+                
+                VISIT(c, expr, e->v.BinOp.left);
+                ADDOP_NAME(c, loc, LOAD_METHOD, func->v.Attribute.attr, names);
+                asdl_expr_seq *args = e->v.BinOp.right->v.Call.args;
+                asdl_keyword_seq *keywords = e->v.BinOp.right->v.Call.keywords;
+                return compiler_call_helper_impl(c, loc, 0, args, NULL, keywords, NULL);
+            }
             return compiler_call_pipeline(c, e->v.BinOp.right, e->v.BinOp.left);
         } else {
             VISIT(c, expr, e->v.BinOp.left);

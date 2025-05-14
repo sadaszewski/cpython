@@ -5366,7 +5366,8 @@ ex_call:
                     ADDOP_I(c, loc, BUILD_MAP, 0);
                     have_dict = 1;
                 }
-                VISIT(c, expr, kw->value);
+                expr_ty elt = kw->value;
+                HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
                 ADDOP_I(c, loc, DICT_MERGE, 1);
             }
             else {

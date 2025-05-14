@@ -347,6 +347,7 @@ static int compiler_call_simple_kw_helper(struct compiler *c,
                                           location loc,
                                           asdl_keyword_seq *keywords,
                                           Py_ssize_t nkwelts);
+static bool IS_PIPELINE_LHS_PLACEHOLDER(expr_ty elt);
 static int compiler_call_helper_impl(struct compiler *c, location loc,
                                 int n, asdl_expr_seq *args,
                                 PyObject *injected_arg,
@@ -4462,7 +4463,8 @@ starunpack_helper_impl(struct compiler *c, location loc,
                 ADDOP_I(c, loc, build, i+pushed);
                 sequence_built = 1;
             }
-            VISIT(c, expr, elt->v.Starred.value);
+            elt = elt->v.Starred.value;
+            HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
             ADDOP_I(c, loc, extend, 1);
         }
         else {
@@ -5233,8 +5235,18 @@ compiler_call_simple_kw_helper(struct compiler *c, location loc,
 }
 
 
-#define IS_PIPELINE_LHS_PLACEHOLDER(elt) \
-    (elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_"))
+static bool IS_PIPELINE_LHS_PLACEHOLDER(expr_ty elt) {
+    if (elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_")) {
+        return true;
+    }
+
+    if (elt->kind == Starred_kind) {
+        return IS_PIPELINE_LHS_PLACEHOLDER(elt->v.Starred.value);
+    }
+
+    return false;
+}
+    
 
 
 /* shared code between compiler_call and compiler_class */
@@ -5322,7 +5334,8 @@ ex_call:
 
     /* Do positional arguments. */
     if (n == 0 && nelts == 1 && ((expr_ty)asdl_seq_GET(args, 0))->kind == Starred_kind) {
-        VISIT(c, expr, ((expr_ty)asdl_seq_GET(args, 0))->v.Starred.value);
+        expr_ty elt = ((expr_ty)asdl_seq_GET(args, 0))->v.Starred.value;
+        HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
     }
     else {
         RETURN_IF_ERROR(starunpack_helper_impl(c, loc, args, injected_arg, n,

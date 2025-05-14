@@ -27,3 +27,15 @@ Or keyword:
 ```
 
 Only one placeholder is allowed, since everything happens on the stack!
+
+Support for star arguments:
+
+```python
+[[1,2,3],[4,5,6]] |> zip(*_) |> list()
+```
+
+Support for keyword arguments:
+
+```python
+{'a': 1, 'b': 2, 'c': 3} |> "{a} {b} {c}".format(**_)
+```

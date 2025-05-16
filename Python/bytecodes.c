@@ -1927,6 +1927,15 @@ dummy_func(
             }
         }
 
+        inst(HAS_ATTR, (owner -- has_attr)) {
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            if (PyObject_HasAttr(owner, name)) {
+                has_attr = Py_True;
+            } else {
+                has_attr = Py_False;
+            }
+        }
+
         macro(LOAD_ATTR) =
             _SPECIALIZE_LOAD_ATTR +
             unused/8 +
@@ -4073,6 +4082,25 @@ dummy_func(
         pure inst(SWAP, (bottom, unused[oparg-2], top --
                     top, unused[oparg-2], bottom)) {
             assert(oparg >= 2);
+        }
+
+        inst(SWAP_NULL, ( -- )) {
+            PyObject **stack_pointer = _PyFrame_GetStackPointer(frame);
+            PyObject **stack_base = _PyFrame_Stackbase(frame);
+            PyObject **null_pointer = stack_pointer - 1;
+            while (null_pointer > stack_base && *null_pointer != NULL) {
+                null_pointer--;
+            }
+            if (null_pointer > stack_base && *null_pointer == NULL) {
+                PyObject *tos = *(stack_pointer - 1);
+                *(stack_pointer - 1) = *null_pointer;
+                *null_pointer = tos;
+            } else {
+                _PyErr_Format(tstate, PyExc_ValueError,
+                              "SWAP_NULL issue while no NULL on the stack");
+                DECREF_INPUTS();
+                ERROR_IF(true, error);
+            }
         }
 
         inst(INSTRUMENTED_INSTRUCTION, ( -- )) {

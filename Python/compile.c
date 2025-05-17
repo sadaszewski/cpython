@@ -4402,6 +4402,10 @@ compiler_boolop(struct compiler *c, expr_ty e)
     return SUCCESS;
 }
 
+#define CONJURE_PIPELINE_LHS() \
+    ADDOP_I(c, NO_LOCATION, COPY_NULL, 2)
+
+
 #define HANDLE_PIPELINE_LHS(pipeline_lhs_consumed) \
     if (pipeline_lhs != NULL && elt->kind == Name_kind && _PyUnicode_EqualToASCIIString(elt->v.Name.id, "_")) { \
         if ((pipeline_lhs_consumed)) { \
@@ -4409,7 +4413,7 @@ compiler_boolop(struct compiler *c, expr_ty e)
             return ERROR; \
         } \
         (pipeline_lhs_consumed) = true; \
-        VISIT(c, expr, pipeline_lhs); \
+        CONJURE_PIPELINE_LHS(); \
     } else { \
         VISIT(c, expr, elt); \
     }
@@ -4437,7 +4441,7 @@ starunpack_helper_impl(struct compiler *c, location loc,
             HANDLE_PIPELINE_LHS(*pipeline_lhs_consumed);
         }
         if (pipeline_lhs != NULL && inject_pipeline_lhs) {
-            VISIT(c, expr, pipeline_lhs);
+            CONJURE_PIPELINE_LHS();
             n++;
         }
         if (injected_arg) {
@@ -4476,7 +4480,7 @@ starunpack_helper_impl(struct compiler *c, location loc,
     }
     assert(sequence_built);
     if (pipeline_lhs != NULL && inject_pipeline_lhs) {
-        VISIT(c, expr, pipeline_lhs);
+        CONJURE_PIPELINE_LHS();
         ADDOP_I(c, loc, add, 1);
     }
     if (injected_arg) {
@@ -5087,10 +5091,10 @@ compiler_call_pipeline(struct compiler *c, expr_ty e, expr_ty pipeline_lhs)
     }
     NEW_JUMP_TARGET_LABEL(c, skip_normal_call);
     RETURN_IF_ERROR(check_caller(c, e->v.Call.func));
+    if (pipeline_lhs != NULL) {
+        VISIT(c, expr, pipeline_lhs);
+    }
     VISIT(c, expr, e->v.Call.func);
-    //if (pipeline_lhs == NULL) {
-    //    RETURN_IF_ERROR(maybe_optimize_function_call(c, e, skip_normal_call));
-    //}
     location loc = LOC(e->v.Call.func);
     ADDOP(c, loc, PUSH_NULL);
     loc = LOC(e);
@@ -5100,6 +5104,10 @@ compiler_call_pipeline(struct compiler *c, expr_ty e, expr_ty pipeline_lhs)
                               e->v.Call.keywords,
                               pipeline_lhs,
                               false);
+    if (pipeline_lhs != NULL) {
+        ADDOP_I(c, loc, SWAP, 2);
+        ADDOP(c, loc, POP_TOP);
+    }
     USE_LABEL(c, skip_normal_call);
     return ret;
 }
@@ -5308,7 +5316,7 @@ compiler_call_helper_impl(struct compiler *c, location loc,
         HANDLE_PIPELINE_LHS(pipeline_lhs_consumed);
     }
     if (pipeline_lhs != NULL && inject_pipeline_lhs) {
-        VISIT(c, expr, pipeline_lhs);
+        CONJURE_PIPELINE_LHS();
         nelts++;
     }
     if (injected_arg) {

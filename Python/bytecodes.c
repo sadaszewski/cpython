@@ -4084,20 +4084,21 @@ dummy_func(
             assert(oparg >= 2);
         }
 
-        inst(SWAP_NULL, ( -- )) {
-            PyObject **stack_pointer = _PyFrame_GetStackPointer(frame);
-            PyObject **stack_base = _PyFrame_Stackbase(frame);
+        inst(COPY_NULL, ( -- top )) {
+            assert(oparg >= 1);
             PyObject **null_pointer = stack_pointer - 1;
+            PyObject **stack_base = _PyFrame_Stackbase(frame);
+            
             while (null_pointer > stack_base && *null_pointer != NULL) {
                 null_pointer--;
             }
+
             if (null_pointer > stack_base && *null_pointer == NULL) {
-                PyObject *tos = *(stack_pointer - 1);
-                *(stack_pointer - 1) = *null_pointer;
-                *null_pointer = tos;
+                top = *(null_pointer - oparg);
+                Py_INCREF(top);
             } else {
                 _PyErr_Format(tstate, PyExc_ValueError,
-                              "SWAP_NULL issue while no NULL on the stack");
+                              "COPY_NULL issued but no NULL found on the stack");
                 DECREF_INPUTS();
                 ERROR_IF(true, error);
             }

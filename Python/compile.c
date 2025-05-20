@@ -6200,6 +6200,36 @@ compiler_with(struct compiler *c, stmt_ty s, int pos)
     return SUCCESS;
 }
 
+static expr_ty leftmost_call(expr_ty e, expr_ty c) {
+    switch (e->kind) {
+    case Attribute_kind:
+        return leftmost_call(e->v.Attribute.value, c);
+    case Call_kind:
+        return leftmost_call(e->v.Call.func, e);
+    case Subscript_kind:
+        return leftmost_call(e->v.Subscript.value, c);
+    default:
+        break;
+    }
+    return c;
+}
+
+static int compiler_pipeline(struct compiler *c, expr_ty e) {
+    printf("Compiler pipeline!\n");
+    VISIT(c, expr, e->v.Pipeline.left);
+    expr_ty rhs_leftmost = leftmost_call(e->v.Pipeline.right, NULL);
+    if (rhs_leftmost) {
+        printf("rhs_leftmost->func.kind: %d\n", rhs_leftmost->v.Call.func->kind);
+        printf("rhs_leftmost->args: 0x%08llX\n", (unsigned long long) rhs_leftmost->v.Call.args);
+        if (rhs_leftmost->v.Call.args) {
+            printf("rhs_leftmost->args->size: %ld\n", rhs_leftmost->v.Call.args->size);
+        }
+    } else {
+        printf("No leftmost RHS call!");
+    }
+    return SUCCESS;
+}
+
 static int
 compiler_visit_expr1(struct compiler *c, expr_ty e)
 {
@@ -6356,6 +6386,8 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
         return compiler_list(c, e);
     case Tuple_kind:
         return compiler_tuple(c, e);
+    case Pipeline_kind:
+        return compiler_pipeline(c, e);
     }
     return SUCCESS;
 }

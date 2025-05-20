@@ -705,6 +705,42 @@ astfold_mod(mod_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
     return 1;
 }
 
+static expr_ty leftmost_call(expr_ty e, expr_ty c) {
+    switch (e->kind) {
+    case Attribute_kind:
+        return leftmost_call(e->v.Attribute.value, c);
+    case Call_kind:
+        return leftmost_call(e->v.Call.func, e);
+    case Subscript_kind:
+        return leftmost_call(e->v.Subscript.value, c);
+    default:
+        break;
+    }
+    return c;
+}
+
+static int handle_pipeline(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state) {
+    //_Py_asdl_expr_seq_new(ctx_);
+    printf("handle_pipeline()\n");
+    printf("leftmost_call: 0x%08llX\n", (unsigned long long) leftmost_call);
+    printf("node_: 0x%08llX\n", (unsigned long long) node_);
+    printf("node_->v.Pipeline.right: 0x%08llX\n", (unsigned long long) node_->v.Pipeline.right);
+    expr_ty rhs_leftmost_call = leftmost_call(node_->v.Pipeline.right, NULL);
+    if (rhs_leftmost) {
+        printf("rhs_leftmost->func.kind: %d\n", rhs_leftmost->v.Call.func->kind);
+        printf("rhs_leftmost->args: 0x%08llX\n", (unsigned long long) rhs_leftmost->v.Call.args);
+        if (rhs_leftmost->v.Call.args) {
+            printf("rhs_leftmost->args->size: %ld\n", rhs_leftmost->v.Call.args->size);
+        }
+    } else {
+        printf("No leftmost RHS call!");
+    }
+    if (!rhs_leftmost_call) {
+        return 1;
+    }
+    return 1;
+}
+
 static int
 astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
 {
@@ -721,6 +757,12 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
         CALL(astfold_expr, expr_ty, node_->v.BinOp.left);
         CALL(astfold_expr, expr_ty, node_->v.BinOp.right);
         CALL(fold_binop, expr_ty, node_);
+        break;
+    case Pipeline_kind:
+        CALL(astfold_expr, expr_ty, node_->v.Pipeline.left);
+        CALL(astfold_expr, expr_ty, node_->v.Pipeline.right);
+        CALL(handle_pipeline, expr_ty, node_);
+        printf("Pipeline_kind case done.\n");
         break;
     case UnaryOp_kind:
         CALL(astfold_expr, expr_ty, node_->v.UnaryOp.operand);

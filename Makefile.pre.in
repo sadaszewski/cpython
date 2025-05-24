@@ -418,6 +418,7 @@ PYTHON_OBJS=	\
 		Python/assemble.o \
 		Python/ast.o \
 		Python/ast_opt.o \
+		Python/pipeline.o \
 		Python/ast_unparse.o \
 		Python/bltinmodule.o \
 		Python/brc.o \

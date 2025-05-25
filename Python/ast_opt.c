@@ -725,8 +725,6 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
         CALL(fold_binop, expr_ty, node_);
         break;
     case Pipeline_kind:
-        CALL(astfold_expr, expr_ty, node_->v.Pipeline.left);
-        CALL(astfold_expr, expr_ty, node_->v.Pipeline.right);
         CALL(handle_pipeline, expr_ty, node_);
         printf("Pipeline_kind case done.\n");
         break;

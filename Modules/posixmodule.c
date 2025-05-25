@@ -323,7 +323,6 @@ corresponding Unix manual entries for more information on calls.");
 #  endif
 #endif
 
-#undef USE_XATTRS
 #ifdef USE_XATTRS
 #  include <sys/xattr.h>
 #endif

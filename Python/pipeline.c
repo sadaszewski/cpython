@@ -284,27 +284,5 @@ static int transform_pipeline(expr_ty node, PyArena *arena, _PyASTOptimizeState 
 
 
 int handle_pipeline(expr_ty node, PyArena *arena, _PyASTOptimizeState *state) {
-    //_Py_asdl_expr_seq_new(ctx_);
-    printf("handle_pipeline()\n");
-    printf("leftmost_call: 0x%08llX\n", (unsigned long long) leftmost_call);
-    printf("node_: 0x%08llX\n", (unsigned long long) node);
-    printf("node_->v.Pipeline.right: 0x%08llX\n", (unsigned long long) node->v.Pipeline.right);
-    expr_ty rhs_leftmost_call = leftmost_call(node->v.Pipeline.right, NULL);
-    if (rhs_leftmost_call) {
-        printf("rhs_leftmost_call->func.kind: %d\n", rhs_leftmost_call->v.Call.func->kind);
-        printf("rhs_leftmost_call->args: 0x%08llX\n", (unsigned long long) rhs_leftmost_call->v.Call.args);
-        if (rhs_leftmost_call->v.Call.args) {
-            printf("rhs_leftmost_call->args->size: %ld\n", rhs_leftmost_call->v.Call.args->size);
-        }
-    } else {
-        printf("No leftmost RHS call!");
-    }
-    bool placeholder_found = contains_placeholder(node->v.Pipeline.right);
-    printf("placeholder_found: %d\n", (int) placeholder_found);
-    /* if (!rhs_leftmost_call) {
-        return 1;
-    }
-    return 1;*/
-
     return transform_pipeline(node, arena, state);
 }

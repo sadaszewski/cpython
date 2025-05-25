@@ -42,11 +42,11 @@ static expr_ty leftmost_call(expr_ty e, expr_ty c) {
     }
 
 #define WALK_ARG(x) \
-    { \
+    if ((x) != NULL) { \
         struct _expr tmp; \
         tmp.kind = Name_kind; \
         tmp.v.Name.ctx = Store; \
-        tmp.v.Name.id = x->arg; \
+        tmp.v.Name.id = (x)->arg; \
         if (include_store) \
             WALK(&tmp); \
     }
@@ -237,7 +237,8 @@ static bool walk(expr_ty node, bool(*callback)(expr_ty, void*), void *userdata, 
         WALK_TYPE_PARAM(asdl_seq_GET((x), i)); \
     }
 
-#define WALK_WITHITEM(x) { \
+#define WALK_WITHITEM(x) \
+    if ((x) != NULL) { \
         WALK((x)->context_expr); \
         WALK((x)->optional_vars); \
     }
@@ -344,7 +345,7 @@ static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userd
         WALK(node->v.Raise.cause);
         WALK(node->v.Raise.exc);
         break;
-    case Try_kind:
+    /*case Try_kind:
         WALK_STMT_SEQ(node->v.Try.body);
         WALK_STMT_SEQ(node->v.Try.finalbody);
         WALK_EXC_HANDLER_SEQ(node->v.Try.handlers);
@@ -355,7 +356,7 @@ static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userd
         WALK_STMT_SEQ(node->v.TryStar.finalbody);
         WALK_EXC_HANDLER_SEQ(node->v.TryStar.handlers);
         WALK_STMT_SEQ(node->v.TryStar.orelse);
-        break;
+        break;*/
     case Assert_kind:
         WALK(node->v.Assert.msg);
         WALK(node->v.Assert.test);

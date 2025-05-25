@@ -377,6 +377,7 @@ static PyCodeObject *optimize_and_assemble(struct compiler *, int addNone);
 
 #define CAPSULE_NAME "compile.c compiler unit"
 
+int walk_replace_pipelines(mod_ty m, PyArena *arena);
 
 static int
 compiler_setup(struct compiler *c, mod_ty mod, PyObject *filename,
@@ -411,6 +412,9 @@ compiler_setup(struct compiler *c, mod_ty mod, PyObject *filename,
     c->c_save_nested_seqs = false;
 
     if (!_PyAST_Optimize(mod, arena, c->c_optimize, merged)) {
+        return ERROR;
+    }
+    if (!walk_replace_pipelines(mod, arena)) {
         return ERROR;
     }
     c->c_st = _PySymtable_Build(mod, filename, &c->c_future);

@@ -251,15 +251,30 @@ static bool walk(expr_ty node, bool(*callback)(expr_ty, void*), void *userdata, 
 #define WALK_EXC_HANDLER(x) \
     switch ((x)->kind) { \
     case ExceptHandler_kind: \
-        WALK((x)->v.ExceptHandler.type); \
         WALK_STMT_SEQ((x)->v.ExceptHandler.body); \
+        WALK((x)->v.ExceptHandler.type); \
         break; \
     }
 
 #define WALK_EXC_HANDLER_SEQ(x) \
-    for (int i = 0; i < asdl_seq_LEN(x); i++) { \
-        WALK_EXC_HANDLER(asdl_seq_GET((x), i)); \
+    if (!walk_exc_handler_seq(x, callback, userdata, include_store)) { \
+        return false; \
     }
+
+static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userdata, bool include_store);
+
+static bool walk_exc_handler_seq(
+    asdl_excepthandler_seq *x,
+    bool(*callback)(expr_ty, void*),
+    void *userdata,
+    bool include_store
+) {
+    for (int i = 0; i < asdl_seq_LEN(x); i++) {
+        excepthandler_ty exc_h = asdl_seq_GET(x, i);
+        WALK_EXC_HANDLER(exc_h);
+    }
+    return true;
+}
 
 static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userdata, bool include_store) {
     switch (node->kind) {
@@ -345,7 +360,7 @@ static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userd
         WALK(node->v.Raise.cause);
         WALK(node->v.Raise.exc);
         break;
-    /*case Try_kind:
+    case Try_kind:
         WALK_STMT_SEQ(node->v.Try.body);
         WALK_STMT_SEQ(node->v.Try.finalbody);
         WALK_EXC_HANDLER_SEQ(node->v.Try.handlers);
@@ -356,7 +371,7 @@ static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userd
         WALK_STMT_SEQ(node->v.TryStar.finalbody);
         WALK_EXC_HANDLER_SEQ(node->v.TryStar.handlers);
         WALK_STMT_SEQ(node->v.TryStar.orelse);
-        break;*/
+        break;
     case Assert_kind:
         WALK(node->v.Assert.msg);
         WALK(node->v.Assert.test);

@@ -630,7 +630,7 @@ fold_compare(expr_ty node, PyArena *arena, _PyASTOptimizeState *state)
 
 static int astfold_mod(mod_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
 static int astfold_stmt(stmt_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
-static int astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
+int astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
 static int astfold_arguments(arguments_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
 static int astfold_comprehension(comprehension_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
 static int astfold_keyword(keyword_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
@@ -707,7 +707,7 @@ astfold_mod(mod_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
 
 int handle_pipeline(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
 
-static int
+int
 astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
 {
     if (++state->recursion_depth > state->recursion_limit) {

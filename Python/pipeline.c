@@ -212,6 +212,180 @@ static bool walk(expr_ty node, bool(*callback)(expr_ty, void*), void *userdata, 
     }
 }
 
+#define WALK_STMT(x) \
+    if ((x) != NULL && !walk_stmt((x), callback, userdata, include_store)) { \
+        return false; \
+    }
+
+#define WALK_STMT_SEQ(x) \
+    for (int i = 0; i < asdl_seq_LEN(x); i++) { \
+        WALK_STMT(asdl_seq_GET((x), i)); \
+    }
+
+#define WALK_TYPE_PARAM(x) \
+    switch((x)->kind) { \
+    case TypeVar_kind: \
+        WALK((x)->v.TypeVar.bound); \
+        WALK((x)->v.TypeVar.default_value); \
+        break; \
+    case ParamSpec_kind: \
+        WALK((x)->v.ParamSpec.default_value); \
+        break; \
+    case TypeVarTuple_kind: \
+        WALK((x)->v.TypeVarTuple.default_value); \
+        break; \
+    }
+
+#define WALK_TYPE_PARAM_SEQ(x) \
+    for (int i = 0; i < asdl_seq_LEN(x); i++) { \
+        WALK_TYPE_PARAM(asdl_seq_GET((x), i)); \
+    }
+
+#define WALK_WITHITEM(x) { \
+        WALK((x)->context_expr); \
+        WALK((x)->optional_vars); \
+    }
+
+#define WALK_WITHITEM_SEQ(x) \
+    for (int i = 0; i < asdl_seq_LEN(x); i++) { \
+        WALK_WITHITEM(asdl_seq_GET((x), i)); \
+    }
+
+#define WALK_EXC_HANDLER(x) \
+    switch ((x)->kind) { \
+    case ExceptHandler_kind: \
+        WALK((x)->v.ExceptHandler.type); \
+        WALK_STMT_SEQ((x)->v.ExceptHandler.body); \
+        break; \
+    }
+
+#define WALK_EXC_HANDLER_SEQ(x) \
+    for (int i = 0; i < asdl_seq_LEN(x); i++) { \
+        WALK_EXC_HANDLER(asdl_seq_GET((x), i)); \
+    }
+
+static bool walk_stmt(stmt_ty node, bool(*callback)(expr_ty, void*), void *userdata, bool include_store) {
+    switch (node->kind) {
+    case FunctionDef_kind:
+        WALK_ARGS(node->v.FunctionDef.args);
+        WALK_STMT_SEQ(node->v.FunctionDef.body);
+        WALK_SEQ(node->v.FunctionDef.decorator_list);
+        WALK(node->v.FunctionDef.returns);
+        WALK_TYPE_PARAM_SEQ(node->v.FunctionDef.type_params);
+        break;
+    case AsyncFunctionDef_kind:
+        WALK_ARGS(node->v.AsyncFunctionDef.args);
+        WALK_STMT_SEQ(node->v.AsyncFunctionDef.body);
+        WALK_SEQ(node->v.AsyncFunctionDef.decorator_list);
+        WALK(node->v.AsyncFunctionDef.returns);
+        WALK_TYPE_PARAM_SEQ(node->v.AsyncFunctionDef.type_params);
+        break;
+    case ClassDef_kind:
+        WALK_SEQ(node->v.ClassDef.bases);
+        WALK_STMT_SEQ(node->v.ClassDef.body);
+        WALK_SEQ(node->v.ClassDef.decorator_list);
+        WALK_KEYWORD_SEQ(node->v.ClassDef.keywords);
+        WALK_TYPE_PARAM_SEQ(node->v.ClassDef.type_params);
+        break;
+    case Return_kind:
+        WALK(node->v.Return.value);
+        break;
+    case Delete_kind:
+        WALK_SEQ(node->v.Delete.targets);
+        break;
+    case Assign_kind:
+        WALK_SEQ(node->v.Assign.targets);
+        WALK(node->v.Assign.value);
+        break;
+    case TypeAlias_kind:
+        WALK(node->v.TypeAlias.name);
+        WALK_TYPE_PARAM_SEQ(node->v.TypeAlias.type_params);
+        WALK(node->v.TypeAlias.value);
+        break;
+    case AugAssign_kind:
+        WALK(node->v.AugAssign.target);
+        WALK(node->v.AugAssign.value);
+        break;
+    case AnnAssign_kind:
+        WALK(node->v.AnnAssign.annotation);
+        WALK(node->v.AnnAssign.target);
+        WALK(node->v.AnnAssign.value);
+        break;
+    case For_kind:
+        WALK_STMT_SEQ(node->v.For.body);
+        WALK(node->v.For.iter);
+        WALK_STMT_SEQ(node->v.For.orelse);
+        WALK(node->v.For.target);
+        break;
+    case AsyncFor_kind:
+        WALK_STMT_SEQ(node->v.AsyncFor.body);
+        WALK(node->v.AsyncFor.iter);
+        WALK_STMT_SEQ(node->v.AsyncFor.orelse);
+        WALK(node->v.AsyncFor.target);
+        break;
+    case While_kind:
+        WALK_STMT_SEQ(node->v.While.body);
+        WALK_STMT_SEQ(node->v.While.orelse);
+        WALK(node->v.While.test);
+        break;
+    case If_kind:
+        WALK_STMT_SEQ(node->v.If.body);
+        WALK_STMT_SEQ(node->v.If.orelse);
+        WALK(node->v.If.test);
+        break;
+    case With_kind:
+        WALK_STMT_SEQ(node->v.With.body);
+        WALK_WITHITEM_SEQ(node->v.With.items);
+        break;
+    case AsyncWith_kind:
+        WALK_STMT_SEQ(node->v.AsyncWith.body);
+        WALK_WITHITEM_SEQ(node->v.AsyncWith.items);
+        break;
+    case Match_kind:
+        WALK(node->v.Match.subject);
+        break;
+    case Raise_kind:
+        WALK(node->v.Raise.cause);
+        WALK(node->v.Raise.exc);
+        break;
+    case Try_kind:
+        WALK_STMT_SEQ(node->v.Try.body);
+        WALK_STMT_SEQ(node->v.Try.finalbody);
+        WALK_EXC_HANDLER_SEQ(node->v.Try.handlers);
+        WALK_STMT_SEQ(node->v.Try.orelse);
+        break;
+    case TryStar_kind:
+        WALK_STMT_SEQ(node->v.TryStar.body);
+        WALK_STMT_SEQ(node->v.TryStar.finalbody);
+        WALK_EXC_HANDLER_SEQ(node->v.TryStar.handlers);
+        WALK_STMT_SEQ(node->v.TryStar.orelse);
+        break;
+    case Assert_kind:
+        WALK(node->v.Assert.msg);
+        WALK(node->v.Assert.test);
+        break;
+    case Import_kind:
+        break;
+    case ImportFrom_kind:
+        break;
+    case Global_kind:
+        break;
+    case Nonlocal_kind:
+        break;
+    case Expr_kind:
+        WALK(node->v.Expr.value);
+        break;
+    case Pass_kind:
+        break;
+    case Break_kind:
+        break;
+    case Continue_kind:
+        break;
+    }
+
+    return true;
+}
+
 static bool find_placeholder_callback(expr_ty node, void *placeholder_found) {
     if (node->kind == Name_kind && _PyUnicode_EqualToASCIIString(node->v.Name.id, "_")) {
         *((bool*) placeholder_found) = true;

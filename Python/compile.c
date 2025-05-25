@@ -6217,6 +6217,9 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
         VISIT(c, expr, e->v.BinOp.right);
         ADDOP_BINARY(c, loc, e->v.BinOp.op);
         break;
+    case Pipeline_kind:
+        PyErr_Format(PyExc_SystemError, "Pipeline expr should have been transformed into a call.");
+        return ERROR;
     case UnaryOp_kind:
         VISIT(c, expr, e->v.UnaryOp.operand);
         if (e->v.UnaryOp.op == UAdd) {

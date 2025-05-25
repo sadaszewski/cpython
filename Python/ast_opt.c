@@ -726,7 +726,6 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
         break;
     case Pipeline_kind:
         CALL(handle_pipeline, expr_ty, node_);
-        printf("Pipeline_kind case done.\n");
         break;
     case UnaryOp_kind:
         CALL(astfold_expr, expr_ty, node_->v.UnaryOp.operand);

@@ -840,6 +840,13 @@ append_named_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
     return 0;
 }
 
+static int append_ast_pipeline(_PyUnicodeWriter *writer, expr_ty e) {
+    APPEND_EXPR(e->v.Pipeline.left, PR_AWAIT);
+    APPEND_STR(" |> ");
+    APPEND_EXPR(e->v.Pipeline.right, PR_AWAIT);
+    return 0;
+}
+
 static int
 append_ast_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
 {
@@ -906,6 +913,8 @@ append_ast_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
         return append_ast_tuple(writer, e, level);
     case NamedExpr_kind:
         return append_named_expr(writer, e, level);
+    case Pipeline_kind:
+        return append_ast_pipeline(writer, e);
     // No default so compiler emits a warning for unhandled cases
     }
     PyErr_SetString(PyExc_SystemError,

@@ -816,10 +816,6 @@ pipeline[expr_ty]:
     | a=pipeline '|>' b=power { _PyAST_Pipeline(a, b, EXTRA) }
     | power
 
-#pipeline[expr_ty]:
-#    | 'pipe' NAME a[asdl_expr_seq*]=primary+ { _PyAST_Pipeline(asdl_seq_GET(a, 0), asdl_seq_GET(a, 1), EXTRA) }
-#    | power
-
 power[expr_ty]:
     | a=await_primary '**' b=factor { _PyAST_BinOp(a, Pow, b, EXTRA) }
     | await_primary
@@ -831,33 +827,18 @@ power[expr_ty]:
 
 await_primary[expr_ty] (memo):
     | 'await' a=primary { CHECK_VERSION(expr_ty, 5, "Await expressions are", _PyAST_Await(a, EXTRA)) }
-    | primary    
+    | primary
 
 primary[expr_ty]:
-    | primary_attribute
-    | primary_genexp
-    | primary_call
-    | primary_slices
-    | atom
-
-# primary_pipeline[expr_ty]:
-#     | a=primary '|>' b=primary { _PyAST_Pipeline(a, b, EXTRA) }
-
-primary_attribute[expr_ty]:
     | a=primary '.' b=NAME { _PyAST_Attribute(a, b->v.Name.id, Load, EXTRA) }
-
-primary_genexp[expr_ty]:
     | a=primary b=genexp { _PyAST_Call(a, CHECK(asdl_expr_seq*, (asdl_expr_seq*)_PyPegen_singleton_seq(p, b)), NULL, EXTRA) }
-
-primary_call[expr_ty]:
     | a=primary '(' b=[arguments] ')' {
         _PyAST_Call(a,
                  (b) ? ((expr_ty) b)->v.Call.args : NULL,
                  (b) ? ((expr_ty) b)->v.Call.keywords : NULL,
                  EXTRA) }
-
-primary_slices[expr_ty]:
     | a=primary '[' b=slices ']' { _PyAST_Subscript(a, b, Load, EXTRA) }
+    | atom
 
 slices[expr_ty]:
     | a=slice !',' { a }

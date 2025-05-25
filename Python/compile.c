@@ -6200,10 +6200,21 @@ compiler_with(struct compiler *c, stmt_ty s, int pos)
     return SUCCESS;
 }
 
+int handle_pipeline(expr_ty node, PyArena *arena);
+
 static int
 compiler_visit_expr1(struct compiler *c, expr_ty e)
 {
     location loc = LOC(e);
+
+    if (e->kind == Pipeline_kind) {
+        if (!handle_pipeline(e, c->c_arena)) {
+            PyErr_Format(PyExc_SystemError, "Failed to compile pipeline.");
+            return ERROR;
+        }
+        assert(e->kind == Call_kind);
+    }
+
     switch (e->kind) {
     case NamedExpr_kind:
         VISIT(c, expr, e->v.NamedExpr.value);
@@ -6218,7 +6229,7 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
         ADDOP_BINARY(c, loc, e->v.BinOp.op);
         break;
     case Pipeline_kind:
-        PyErr_Format(PyExc_SystemError, "Pipeline expr should have been transformed into a call.");
+        PyErr_SetString(PyExc_SystemError, "Pipeline expression should never make it to this compile stage");
         return ERROR;
     case UnaryOp_kind:
         VISIT(c, expr, e->v.UnaryOp.operand);

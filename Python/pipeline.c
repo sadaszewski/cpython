@@ -5,10 +5,6 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 
-typedef struct _PyASTOptimizeState _PyASTOptimizeState;
-
-int astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
-
 #define EXTRAS(x) (x)->lineno, (x)->col_offset, (x)->end_lineno, (x)->end_col_offset
 
 static expr_ty leftmost_call(expr_ty e, expr_ty c) {
@@ -226,7 +222,7 @@ static bool contains_placeholder(expr_ty node) {
     return placeholder_found;
 }
 
-static int transform_pipeline(expr_ty node, PyArena *arena, _PyASTOptimizeState *state) {
+static int transform_pipeline(expr_ty node, PyArena *arena) {
     expr_ty lhs = node->v.Pipeline.left;
     expr_ty rhs = node->v.Pipeline.right;
     expr_ty rhs_leftmost_call = leftmost_call(rhs, NULL);
@@ -279,10 +275,10 @@ static int transform_pipeline(expr_ty node, PyArena *arena, _PyASTOptimizeState 
         rhs_leftmost_call->v.Call.args = injected_args;
     }
 
-    return astfold_expr(lhs, arena, state);
+    return 1;
 }
 
 
-int handle_pipeline(expr_ty node, PyArena *arena, _PyASTOptimizeState *state) {
-    return transform_pipeline(node, arena, state);
+int handle_pipeline(expr_ty node, PyArena *arena) {
+    return transform_pipeline(node, arena);
 }

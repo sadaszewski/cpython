@@ -705,8 +705,6 @@ astfold_mod(mod_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
     return 1;
 }
 
-int handle_pipeline(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
-
 int
 astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
 {
@@ -725,7 +723,8 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
         CALL(fold_binop, expr_ty, node_);
         break;
     case Pipeline_kind:
-        CALL(handle_pipeline, expr_ty, node_);
+        CALL(astfold_expr, expr_ty, node_->v.Pipeline.left);
+        CALL(astfold_expr, expr_ty, node_->v.Pipeline.right);
         break;
     case UnaryOp_kind:
         CALL(astfold_expr, expr_ty, node_->v.UnaryOp.operand);

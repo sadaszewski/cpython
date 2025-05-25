@@ -812,13 +812,13 @@ factor[expr_ty] (memo):
     | '~' a=factor { _PyAST_UnaryOp(Invert, a, EXTRA) }
     | pipeline
 
-# pipeline[expr_ty]:
-#    | a=pipeline '|>' b=primary { _PyAST_Pipeline(a, b, EXTRA) }
-#    | power
-
 pipeline[expr_ty]:
-    | 'pipe' NAME a[asdl_expr_seq*]=primary+ { _PyAST_Pipeline(asdl_seq_GET(a, 0), asdl_seq_GET(a, 1), EXTRA) }
+    | a=pipeline '|>' b=power { _PyAST_Pipeline(a, b, EXTRA) }
     | power
+
+#pipeline[expr_ty]:
+#    | 'pipe' NAME a[asdl_expr_seq*]=primary+ { _PyAST_Pipeline(asdl_seq_GET(a, 0), asdl_seq_GET(a, 1), EXTRA) }
+#    | power
 
 power[expr_ty]:
     | a=await_primary '**' b=factor { _PyAST_BinOp(a, Pow, b, EXTRA) }
@@ -834,15 +834,14 @@ await_primary[expr_ty] (memo):
     | primary    
 
 primary[expr_ty]:
-    | primary_pipeline
     | primary_attribute
+    | primary_genexp
+    | primary_call
     | primary_slices
     | atom
 
-primary_pipeline[expr_ty]:
-    | a=primary '|>' b=primary { _PyAST_Pipeline(a, b, EXTRA) }
-    | primary_genexp
-    | primary_call
+# primary_pipeline[expr_ty]:
+#     | a=primary '|>' b=primary { _PyAST_Pipeline(a, b, EXTRA) }
 
 primary_attribute[expr_ty]:
     | a=primary '.' b=NAME { _PyAST_Attribute(a, b->v.Name.id, Load, EXTRA) }

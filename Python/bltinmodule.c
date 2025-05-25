@@ -837,7 +837,7 @@ builtin_compile_impl(PyObject *module, PyObject *source, PyObject *filename,
 
             if (flags & PyCF_ONLY_AST) {
                 mod_ty mod = PyAST_obj2mod(source, arena, compile_mode);
-                if (mod == NULL || !_PyAST_Validate(mod)) {
+                if (mod == NULL || !_PyAST_Validate(mod, arena)) {
                     _PyArena_Free(arena);
                     goto error;
                 }
@@ -850,7 +850,7 @@ builtin_compile_impl(PyObject *module, PyObject *source, PyObject *filename,
             }
             else {
                 mod_ty mod = PyAST_obj2mod(source, arena, compile_mode);
-                if (mod == NULL || !_PyAST_Validate(mod)) {
+                if (mod == NULL || !_PyAST_Validate(mod, arena)) {
                     _PyArena_Free(arena);
                     goto error;
                 }

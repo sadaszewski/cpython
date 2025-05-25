@@ -705,8 +705,6 @@ astfold_mod(mod_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
     return 1;
 }
 
-int handle_pipeline(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state);
-
 int
 astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
 {
@@ -725,8 +723,8 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
         CALL(fold_binop, expr_ty, node_);
         break;
     case Pipeline_kind:
-        CALL(handle_pipeline, expr_ty, node_);
-        break;
+        PyErr_SetString(PyExc_SystemError, "Pipeline calls should be transformed before and never reach the optimization stage");
+        return 0;
     case UnaryOp_kind:
         CALL(astfold_expr, expr_ty, node_->v.UnaryOp.operand);
         CALL(fold_unaryop, expr_ty, node_);

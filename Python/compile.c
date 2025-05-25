@@ -7849,7 +7849,7 @@ _PyCompile_CodeGen(PyObject *ast, PyObject *filename, PyCompilerFlags *pflags,
     }
 
     mod_ty mod = PyAST_obj2mod(ast, arena, compile_mode);
-    if (mod == NULL || !_PyAST_Validate(mod)) {
+    if (mod == NULL || !_PyAST_Validate(mod, arena)) {
         _PyArena_Free(arena);
         return NULL;
     }

@@ -12,6 +12,7 @@
 struct validator {
     int recursion_depth;            /* current recursion depth */
     int recursion_limit;            /* recursion limit */
+    PyArena *arena;
 };
 
 static int validate_stmts(struct validator *, asdl_stmt_seq *);
@@ -207,6 +208,8 @@ validate_constant(struct validator *state, PyObject *value)
     return 0;
 }
 
+int handle_pipeline(expr_ty, PyArena *);
+
 static int
 validate_expr(struct validator *state, expr_ty exp, expr_context_ty ctx)
 {
@@ -275,6 +278,11 @@ validate_expr(struct validator *state, expr_ty exp, expr_context_ty ctx)
         break;
     case UnaryOp_kind:
         ret = validate_expr(state, exp->v.UnaryOp.operand, Load);
+        break;
+    case Pipeline_kind:
+        printf("Validating pipeline expression!\n");
+        ret = validate_expr(state, exp->v.Pipeline.left, Load) &&
+            handle_pipeline(exp, state->arena);
         break;
     case Lambda_kind:
         ret = validate_arguments(state, exp->v.Lambda.args) &&
@@ -1044,13 +1052,15 @@ validate_type_params(struct validator *state, asdl_type_param_seq *tps)
 }
 
 int
-_PyAST_Validate(mod_ty mod)
+_PyAST_Validate(mod_ty mod, PyArena *arena)
 {
     assert(!PyErr_Occurred());
     int res = -1;
     struct validator state;
     PyThreadState *tstate;
     int starting_recursion_depth;
+
+    printf("Validation called\n");
 
     /* Setup recursion depth check counters */
     tstate = _PyThreadState_GET();
@@ -1062,6 +1072,7 @@ _PyAST_Validate(mod_ty mod)
     starting_recursion_depth = recursion_depth;
     state.recursion_depth = starting_recursion_depth;
     state.recursion_limit = Py_C_RECURSION_LIMIT;
+    state.arena = arena;
 
     switch (mod->kind) {
     case Module_kind:

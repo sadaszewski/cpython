@@ -881,7 +881,7 @@ _is_end_of_source(Parser *p) {
 }
 
 void *
-_PyPegen_run_parser(Parser *p)
+_PyPegen_run_parser(Parser *p, PyArena *arena)
 {
     void *res = _PyPegen_parse(p);
     assert(p->level == 0);
@@ -917,7 +917,7 @@ _PyPegen_run_parser(Parser *p)
         p->start_rule == Py_file_input ||
         p->start_rule == Py_eval_input)
     {
-        if (!_PyAST_Validate(res)) {
+        if (!_PyAST_Validate(res, arena)) {
             return NULL;
         }
     }
@@ -956,7 +956,7 @@ _PyPegen_run_parser_from_file_pointer(FILE *fp, int start_rule, PyObject *filena
         goto error;
     }
 
-    result = _PyPegen_run_parser(p);
+    result = _PyPegen_run_parser(p, arena);
     _PyPegen_Parser_Free(p);
 
     if (tok->fp_interactive && tok->interactive_src_start && result && interactive_src != NULL) {
@@ -1006,7 +1006,7 @@ _PyPegen_run_parser_from_string(const char *str, int start_rule, PyObject *filen
         goto error;
     }
 
-    result = _PyPegen_run_parser(p);
+    result = _PyPegen_run_parser(p, arena);
     _PyPegen_Parser_Free(p);
 
 error:

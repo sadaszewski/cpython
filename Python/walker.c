@@ -69,6 +69,23 @@ static bool ast_walker_arguments(arguments_ty args, EXTRAS) {
     );
 }
 
+static bool ast_walker_compr(comprehension_ty compr, EXTRAS) {
+    return (
+        ast_walker_expr(compr->target, EXTRA_3) &&
+        ast_walker_expr(compr->iter, EXTRA_3) &&
+        ast_walker_expr_seq(compr->ifs, EXTRA_3)
+    );
+}
+
+static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
+    for (int i = 0; i < asdl_seq_LEN(seq); i++) {
+        comprehension_ty item = asdl_seq_GET(seq, i);
+        if (!ast_walker_compr(item->target, EXTRA_3)) {
+            return false;
+        }
+    }
+}
+
 static bool ast_walker_expr(expr_ty node, EXTRAS) {
 
     if (node == NULL) {
@@ -94,49 +111,52 @@ static bool ast_walker_expr(expr_ty node, EXTRAS) {
                 ast_walker_arguments(node->v.Lambda.args, EXTRA_3) &&
                 ast_walker_expr(node->v.Lambda.body, EXTRA_3)
             ); 
-        /* case IfExp_kind:
-            WALK(node->v.IfExp.test);
-            WALK(node->v.IfExp.body);
-            WALK(node->v.IfExp.orelse);
-            break;
+        case IfExp_kind:
+            return (
+                ast_walker_expr(node->v.IfExp.test, EXTRA_3) &&
+                ast_walker_expr(node->v.IfExp.body, EXTRA_3) &&
+                ast_walker_expr(node->v.IfExp.orelse, EXTRA_3)
+            );
         case Dict_kind:
-            WALK_SEQ(node->v.Dict.keys);
-            WALK_SEQ(node->v.Dict.values);
-            break;
+            return (
+                ast_walker_expr_seq(node->v.Dict.keys, EXTRA_3) &&
+                ast_walker_expr_seq(node->v.Dict.values, EXTRA_3)
+            );
         case Set_kind:
-            WALK_SEQ(node->v.Set.elts);
-            break;
+            return ast_walker_expr_seq(node->v.Set.elts, EXTRA_3);
         case ListComp_kind:
-            WALK(node->v.ListComp.elt);
-            WALK_COMPR_SEQ(node->v.ListComp.generators);
-            break;
+            return (
+                ast_walker_expr(node->v.ListComp.elt, EXTRA_3) &&
+                ast_walker_compr_seq(node->v.ListComp.generators, EXTRA_3)
+            );
         case SetComp_kind:
-            WALK(node->v.SetComp.elt);
-            WALK_COMPR_SEQ(node->v.SetComp.generators);
-            break;
+            return(
+                ast_walker_expr(node->v.SetComp.elt, EXTRA_3) &&
+                ast_walker_compr_seq(node->v.SetComp.generators, EXTRA_3)
+            );
         case DictComp_kind:
-            WALK(node->v.DictComp.key);
-            WALK(node->v.DictComp.value);
-            WALK_COMPR_SEQ(node->v.DictComp.generators);
-            break;
+            return (
+                ast_walker_expr(node->v.DictComp.key, EXTRA_3) &&
+                ast_walker_expr(node->v.DictComp.value, EXTRA_3) &&
+                ast_walker_compr_seq(node->v.DictComp.generators, EXTRA_3)
+            );
         case GeneratorExp_kind:
-            WALK(node->v.GeneratorExp.elt);
-            WALK_COMPR_SEQ(node->v.GeneratorExp.generators);
-            break;
+            return (
+                ast_walker_expr(node->v.GeneratorExp.elt, EXTRA_3) &&
+                ast_walker_compr_seq(node->v.GeneratorExp.generators, EXTRA_3)
+            );
         case Await_kind:
-            WALK(node->v.Await.value);
-            break;
+            return ast_walker_expr(node->v.Await.value, EXTRA_3);
         case Yield_kind:
-            WALK(node->v.Yield.value);
-            break;
+            return ast_walker_expr(node->v.Yield.value, EXTRA_3);
         case YieldFrom_kind:
-            WALK(node->v.YieldFrom.value);
-            break;
+            return ast_walker_expr(node->v.YieldFrom.value, EXTRA_3);
         case Compare_kind:
-            WALK_SEQ(node->v.Compare.comparators);
-            WALK(node->v.Compare.left);
-            break;
-        case Call_kind :
+            return (
+                ast_walker_expr(node->v.Compare.left, EXTRA_3) &&
+                ast_walker_expr_seq(node->v.Compare.comparators, EXTRA_3)
+            );
+        /*case Call_kind :
             WALK(node->v.Call.func);
             WALK_SEQ(node->v.Call.args);
             WALK_KEYWORD_SEQ(node->v.Call.keywords);

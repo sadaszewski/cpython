@@ -80,7 +80,7 @@ static bool ast_walker_compr(comprehension_ty compr, EXTRAS) {
 static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         comprehension_ty item = asdl_seq_GET(seq, i);
-        if (!ast_walker_compr(item->target, EXTRA_3)) {
+        if (!ast_walker_compr(item, EXTRA_3)) {
             return false;
         }
     }
@@ -179,48 +179,44 @@ static bool ast_walker_expr(expr_ty node, EXTRAS) {
                 ast_walker_expr_seq(node->v.Call.args, EXTRA_3) &&
                 ast_walker_keyword_seq(node->v.Call.keywords, EXTRA_3)
             );
-        /*case FormattedValue_kind:
-            WALK(node->v.FormattedValue.format_spec);
-            WALK(node->v.FormattedValue.value);
-            break;
+        case FormattedValue_kind:
+            return(
+                ast_walker_expr(node->v.FormattedValue.format_spec, EXTRA_3) &&
+                ast_walker_expr(node->v.FormattedValue.value, EXTRA_3)
+            );
         case JoinedStr_kind:
-            WALK_SEQ(node->v.JoinedStr.values);
-            break;
+            return ast_walker_expr_seq(node->v.JoinedStr.values, EXTRA_3);
         case Constant_kind:
             break;
         case Attribute_kind:
-            WALK_IDENTIFIER(node->v.Attribute.attr, node->v.Attribute.ctx);
-            WALK(node->v.Attribute.value);
-            break;
+            return (
+                ast_walker_expr(node->v.Attribute.value, node->v.Attribute.ctx, EXTRA_2) &&
+                ast_walker_identifier(node->v.Attribute.attr, node->v.Attribute.ctx, EXTRA_2)
+            );
         case Subscript_kind:
-            if (node->v.Subscript.ctx != Store || include_store)
-                WALK(node->v.Subscript.slice);
-            if (node->v.Subscript.ctx != Store || include_store)
-                WALK(node->v.Subscript.value);
-            break;
+            return (
+                ast_walker_expr(node->v.Subscript.value, node->v.Subscript.ctx, EXTRA_2) &&
+                ast_walker_expr(node->v.Subscript.slice, node->v.Subscript.ctx, EXTRA_2)
+            );
         case Starred_kind:
-            if (node->v.Starred.ctx != Store || include_store)
-                WALK(node->v.Starred.value);
-            break;
+            return ast_walker_expr(node->v.Starred.value, node->v.Starred.ctx, EXTRA_2);
         case Name_kind:
-            break;
+            return ast_walker_identifier(node->v.Name.id, node->v.Name.ctx, EXTRA_2);
         case List_kind:
-            if (node->v.List.ctx != Store || include_store)
-                WALK_SEQ(node->v.List.elts);
-            break;
+            return ast_walker_expr_seq(node->v.List.elts, node->v.List.ctx, EXTRA_2);
         case Tuple_kind:
-            if (node->v.Tuple.ctx != Store || include_store)
-                WALK_SEQ(node->v.Tuple.elts);
-            break;
+            return ast_walker_expr_seq(node->v.Tuple.elts, node->v.Tuple.ctx, EXTRA_2);
         case Slice_kind:
-            WALK(node->v.Slice.lower);
-            WALK(node->v.Slice.upper);
-            WALK(node->v.Slice.step);
-            break;
+            return (
+                ast_walker_expr(node->v.Slice.lower, EXTRA_3) &&
+                ast_walker_expr(node->v.Slice.step, EXTRA_3) &&
+                ast_walker_expr(node->v.Slice.upper, EXTRA_3)
+            );
         case Pipeline_kind:
-            WALK(node->v.Pipeline.left);
-            WALK(node->v.Pipeline.right);
-            break;*/
+            return (
+                ast_walker_expr(node->v.Pipeline.left, EXTRA_3) &&
+                ast_walker_expr(node->v.Pipeline.right, EXTRA_3)
+            );
     }
 
     walk_node_ty walk_node = { .Expr = node };

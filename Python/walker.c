@@ -84,6 +84,23 @@ static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
             return false;
         }
     }
+    return true;
+}
+
+static bool ast_walker_keyword(keyword_ty kw, EXTRAS) {
+    return (
+        ast_walker_identifier(kw->arg, EXTRA_3) &&
+        ast_walker_expr(kw->value, EXTRA_3)
+    );
+}
+
+static bool ast_walker_keyword_seq(asdl_keyword_seq *seq, EXTRAS) {
+    for (int i = 0; i < asdl_seq_LEN(seq); i++) {
+        if (!ast_walker_keyword(asdl_seq_GET(seq, i), EXTRA_3)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static bool ast_walker_expr(expr_ty node, EXTRAS) {
@@ -156,12 +173,13 @@ static bool ast_walker_expr(expr_ty node, EXTRAS) {
                 ast_walker_expr(node->v.Compare.left, EXTRA_3) &&
                 ast_walker_expr_seq(node->v.Compare.comparators, EXTRA_3)
             );
-        /*case Call_kind :
-            WALK(node->v.Call.func);
-            WALK_SEQ(node->v.Call.args);
-            WALK_KEYWORD_SEQ(node->v.Call.keywords);
-            break;
-        case FormattedValue_kind:
+        case Call_kind:
+            return (
+                ast_walker_expr(node->v.Call.func, EXTRA_3) &&
+                ast_walker_expr_seq(node->v.Call.args, EXTRA_3) &&
+                ast_walker_keyword_seq(node->v.Call.keywords, EXTRA_3)
+            );
+        /*case FormattedValue_kind:
             WALK(node->v.FormattedValue.format_spec);
             WALK(node->v.FormattedValue.value);
             break;

@@ -362,6 +362,26 @@ static bool ast_walker_matchcase_seq(asdl_match_case_seq *seq, EXTRAS) {
     return true;
 }
 
+static bool ast_walker_exc_handler(excepthandler_ty node, EXTRAS) {
+    switch(node->kind) {
+        case ExceptHandler_kind:
+            return (
+                ast_walker_expr(node->v.ExceptHandler.type, EXTRA_3) &&
+                ast_walker_identifier(node->v.ExceptHandler.name, EXTRA_3) &&
+                ast_walker_stmt_seq(node->v.ExceptHandler.body, EXTRA_3)
+            );
+    }
+}
+
+static bool ast_walker_exc_handler_seq(asdl_excepthandler_seq *seq, EXTRAS) {
+    for (int i = 0; i < asdl_seq_LEN(seq); i++) {
+        if (!ast_walker_exc_handler(asdl_seq_GET(seq, i), EXTRA_3)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
     switch (node->kind) {
         case FunctionDef_kind:
@@ -458,23 +478,27 @@ static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
                 ast_walker_expr(node->v.Match.subject, EXTRA_3) &&
                 ast_walker_matchcase_seq(node->v.Match.cases, EXTRA_3)
             );
-        /*case Raise_kind:
-            WALK(node->v.Raise.cause);
-            WALK(node->v.Raise.exc);
-            break;
+        case Raise_kind:
+            return (
+                ast_walker_expr(node->v.Raise.exc, EXTRA_3) &&
+                ast_walker_expr(node->v.Raise.cause, EXTRA_3)
+            );
         case Try_kind:
-            WALK_STMT_SEQ(node->v.Try.body);
-            WALK_STMT_SEQ(node->v.Try.finalbody);
-            WALK_EXC_HANDLER_SEQ(node->v.Try.handlers);
-            WALK_STMT_SEQ(node->v.Try.orelse);
-            break;
+            return (
+                ast_walker_stmt_seq(node->v.Try.body, EXTRA_3) &&
+                ast_walker_exc_handler_seq(node->v.Try.handlers, EXTRA_3) &&
+                ast_walker_stmt_seq(node->v.Try.orelse, EXTRA_3) &&
+                ast_walker_stmt_seq(node->v.Try.finalbody, EXTRA_3)
+            );
         case TryStar_kind:
-            WALK_STMT_SEQ(node->v.TryStar.body);
-            WALK_STMT_SEQ(node->v.TryStar.finalbody);
-            WALK_EXC_HANDLER_SEQ(node->v.TryStar.handlers);
-            WALK_STMT_SEQ(node->v.TryStar.orelse);
+            return (
+                ast_walker_stmt_seq(node->v.TryStar.body, EXTRA_3) &&
+                ast_walker_exc_handler_seq(node->v.TryStar.handlers, EXTRA_3) &&
+                ast_walker_stmt_seq(node->v.TryStar.orelse, EXTRA_3) &&
+                ast_walker_stmt_seq(node->v.TryStar.finalbody, EXTRA_3)
+            );
             break;
-        case Assert_kind:
+        /*case Assert_kind:
             WALK(node->v.Assert.msg);
             WALK(node->v.Assert.test);
             break;

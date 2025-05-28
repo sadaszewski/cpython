@@ -382,6 +382,22 @@ static bool ast_walker_exc_handler_seq(asdl_excepthandler_seq *seq, EXTRAS) {
     return true;
 }
 
+static bool ast_walker_alias(alias_ty node, EXTRAS) {
+    return (
+        ast_walker_identifier(node->name, EXTRA_3) &&
+        ast_walker_identifier(node->asname, EXTRA_3)
+    );
+}
+
+static bool ast_walker_alias_seq(asdl_alias_seq *seq, EXTRAS) {
+    for (int i = 0; i < asdl_seq_LEN(seq); i++) {
+        if (!ast_walker_alias(asdl_seq_GET(seq, i), EXTRA_3)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
     switch (node->kind) {
         case FunctionDef_kind:
@@ -498,27 +514,32 @@ static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
                 ast_walker_stmt_seq(node->v.TryStar.finalbody, EXTRA_3)
             );
             break;
-        /*case Assert_kind:
-            WALK(node->v.Assert.msg);
-            WALK(node->v.Assert.test);
-            break;
+        case Assert_kind:
+            return (
+                ast_walker_expr(node->v.Assert.test, EXTRA_3) &&
+                ast_walker_expr(node->v.Assert.msg, EXTRA_3)
+            );
         case Import_kind:
-            break;
+            return ast_walker_alias_seq(node->v.Import.names, EXTRA_3);
         case ImportFrom_kind:
-            break;
+            return (
+                ast_walker_identifier(node->v.ImportFrom.module, EXTRA_3) &&
+                ast_walker_alias_seq(node->v.ImportFrom.names, EXTRA_3)
+            );
         case Global_kind:
-            break;
+            return ast_walker_identifier_seq(node->v.Global.names, EXTRA_3);
         case Nonlocal_kind:
-            break;
+            return ast_walker_identifier_seq(node->v.Nonlocal.names, EXTRA_3);
         case Expr_kind:
-            WALK(node->v.Expr.value);
-            break;
+            return (
+                ast_walker_expr(node->v.Expr.value, EXTRA_3)
+            );
         case Pass_kind:
             break;
         case Break_kind:
             break;
         case Continue_kind:
-            break;*/
+            break;
     }
 
     walk_node_ty walk_node = { .Stmt = node };

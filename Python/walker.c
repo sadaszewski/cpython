@@ -251,6 +251,10 @@ static bool ast_walker_expr(expr_ty node, EXTRAS) {
             break;
     }
 
+    if (!res) {
+        return false;
+    }
+
     walk_node_ty walk_node = { .Expr = node };
     res &= callback(WalkExpr_kind, walk_node, ctx, userdata);
 
@@ -604,6 +608,10 @@ static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
             break;
     }
 
+    if (!res) {
+        return false;
+    }
+
     walk_node_ty walk_node = { .Stmt = node };
     res &= callback(WalkStmt_kind, walk_node, ctx, userdata);
 
@@ -629,6 +637,10 @@ static bool ast_walker_mod(mod_ty mod, EXTRAS) {
                 ast_walker_expr(mod->v.FunctionType.returns, EXTRA_3)
             );
             break;
+    }
+
+    if (!res) {
+        return false;
     }
 
     walk_node_ty walk_node = { .Mod = mod };

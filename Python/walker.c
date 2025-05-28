@@ -227,6 +227,172 @@ static bool ast_walker_expr(expr_ty node, EXTRAS) {
     }
 }
 
+static bool ast_walker_stmt(stmt_ty node, EXTRAS);
+
+static bool ast_walker_stmt_seq(asdl_stmt_seq *seq, EXTRAS) {
+    for (int i = 0; i < asdl_seq_LEN(seq); i++) {
+        if (!ast_walker_stmt(asdl_seq_GET(seq, i), EXTRA_3)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool ast_walker_type_param(type_param_ty node, EXTRAS) {
+    switch(node->kind) {
+        case TypeVar_kind:
+            return (
+                ast_walker_identifier(node->v.TypeVar.name, EXTRA_3) &&
+                ast_walker_expr(node->v.TypeVar.bound, EXTRA_3) &&
+                ast_walker_expr(node->v.TypeVar.default_value, EXTRA_3)
+            );
+        case ParamSpec_kind:
+            return (
+                ast_walker_identifier(node->v.ParamSpec.name, EXTRA_3) &&
+                ast_walker_expr(node->v.ParamSpec.default_value, EXTRA_3)
+            );
+        case TypeVarTuple_kind:
+            return (
+                ast_walker_identifier(node->v.TypeVarTuple.name, EXTRA_3) &&
+                ast_walker_expr(node->v.TypeVarTuple.default_value, EXTRA_3)
+            );
+    }
+}
+
+static bool ast_walker_type_param_seq(asdl_type_param_seq *seq, EXTRAS) {
+    for (int i = 0; i < asdl_seq_LEN(seq); i++) {
+        if (!ast_walker_type_param(asdl_seq_GET(seq, i), EXTRA_3)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
+    switch (node->kind) {
+        case FunctionDef_kind:
+            return (
+                ast_walker_expr_seq(node->v.FunctionDef.decorator_list, EXTRA_3) &&
+                ast_walker_identifier(node->v.FunctionDef.name, EXTRA_3) &&
+                ast_walker_arguments(node->v.FunctionDef.args, EXTRA_3) &&
+                ast_walker_stmt_seq(node->v.FunctionDef.body, EXTRA_3) &&
+                ast_walker_expr(node->v.FunctionDef.returns, EXTRA_3) &&
+                ast_walker_type_param_seq(node->v.FunctionDef.type_params, EXTRA_3)
+            );
+        /* case AsyncFunctionDef_kind:
+            WALK_ARGS(node->v.AsyncFunctionDef.args);
+            WALK_STMT_SEQ(node->v.AsyncFunctionDef.body);
+            WALK_SEQ(node->v.AsyncFunctionDef.decorator_list);
+            WALK(node->v.AsyncFunctionDef.returns);
+            WALK_TYPE_PARAM_SEQ(node->v.AsyncFunctionDef.type_params);
+            break;
+        case ClassDef_kind:
+            WALK_SEQ(node->v.ClassDef.bases);
+            WALK_STMT_SEQ(node->v.ClassDef.body);
+            WALK_SEQ(node->v.ClassDef.decorator_list);
+            WALK_KEYWORD_SEQ(node->v.ClassDef.keywords);
+            WALK_TYPE_PARAM_SEQ(node->v.ClassDef.type_params);
+            break;
+        case Return_kind:
+            WALK(node->v.Return.value);
+            break;
+        case Delete_kind:
+            WALK_SEQ(node->v.Delete.targets);
+            break;
+        case Assign_kind:
+            WALK_SEQ(node->v.Assign.targets);
+            WALK(node->v.Assign.value);
+            break;
+        case TypeAlias_kind:
+            WALK(node->v.TypeAlias.name);
+            WALK_TYPE_PARAM_SEQ(node->v.TypeAlias.type_params);
+            WALK(node->v.TypeAlias.value);
+            break;
+        case AugAssign_kind:
+            WALK(node->v.AugAssign.target);
+            WALK(node->v.AugAssign.value);
+            break;
+        case AnnAssign_kind:
+            WALK(node->v.AnnAssign.annotation);
+            WALK(node->v.AnnAssign.target);
+            WALK(node->v.AnnAssign.value);
+            break;
+        case For_kind:
+            WALK_STMT_SEQ(node->v.For.body);
+            WALK(node->v.For.iter);
+            WALK_STMT_SEQ(node->v.For.orelse);
+            WALK(node->v.For.target);
+            break;
+        case AsyncFor_kind:
+            WALK_STMT_SEQ(node->v.AsyncFor.body);
+            WALK(node->v.AsyncFor.iter);
+            WALK_STMT_SEQ(node->v.AsyncFor.orelse);
+            WALK(node->v.AsyncFor.target);
+            break;
+        case While_kind:
+            WALK_STMT_SEQ(node->v.While.body);
+            WALK_STMT_SEQ(node->v.While.orelse);
+            WALK(node->v.While.test);
+            break;
+        case If_kind:
+            WALK_STMT_SEQ(node->v.If.body);
+            WALK_STMT_SEQ(node->v.If.orelse);
+            WALK(node->v.If.test);
+            break;
+        case With_kind:
+            WALK_STMT_SEQ(node->v.With.body);
+            WALK_WITHITEM_SEQ(node->v.With.items);
+            break;
+        case AsyncWith_kind:
+            WALK_STMT_SEQ(node->v.AsyncWith.body);
+            WALK_WITHITEM_SEQ(node->v.AsyncWith.items);
+            break;
+        case Match_kind:
+            WALK(node->v.Match.subject);
+            break;
+        case Raise_kind:
+            WALK(node->v.Raise.cause);
+            WALK(node->v.Raise.exc);
+            break;
+        case Try_kind:
+            WALK_STMT_SEQ(node->v.Try.body);
+            WALK_STMT_SEQ(node->v.Try.finalbody);
+            WALK_EXC_HANDLER_SEQ(node->v.Try.handlers);
+            WALK_STMT_SEQ(node->v.Try.orelse);
+            break;
+        case TryStar_kind:
+            WALK_STMT_SEQ(node->v.TryStar.body);
+            WALK_STMT_SEQ(node->v.TryStar.finalbody);
+            WALK_EXC_HANDLER_SEQ(node->v.TryStar.handlers);
+            WALK_STMT_SEQ(node->v.TryStar.orelse);
+            break;
+        case Assert_kind:
+            WALK(node->v.Assert.msg);
+            WALK(node->v.Assert.test);
+            break;
+        case Import_kind:
+            break;
+        case ImportFrom_kind:
+            break;
+        case Global_kind:
+            break;
+        case Nonlocal_kind:
+            break;
+        case Expr_kind:
+            WALK(node->v.Expr.value);
+            break;
+        case Pass_kind:
+            break;
+        case Break_kind:
+            break;
+        case Continue_kind:
+            break;*/
+    }
+
+    walk_node_ty walk_node = { .Stmt = node };
+    return callback(WalkStmt_kind, walk_node, ctx, userdata);
+}
+
 static bool ast_walker(walk_kind_ty kind, walk_node_ty node, EXTRAS) {
     switch(kind) {
     case WalkExpr_kind:

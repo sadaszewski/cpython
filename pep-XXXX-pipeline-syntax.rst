@@ -139,7 +139,9 @@ How to Teach This
 Reference Implementation
 ========================
 
-[Link to any existing implementation and details about its state, e.g. proof-of-concept.]
+The idea is currently implemented in the following `repository <https://github.com/sadaszewski/cpython)>`_.
+The implementation is fully functional according to the design specified above with good
+code quality. Tests are missing.
 
 
 Rejected Ideas

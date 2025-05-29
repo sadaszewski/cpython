@@ -143,6 +143,10 @@ The idea is currently implemented in the following `repository <https://github.c
 The implementation is fully functional according to the design specified above with good
 code quality. Tests are missing.
 
+Furthermore, the implementation can be
+`tested online <https://sadaszewski.github.io/python-pipeline-operator/dist/console.html>`_ using a
+Pyodide deployment.
+
 
 Rejected Ideas
 ==============

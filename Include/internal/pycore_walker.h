@@ -21,7 +21,13 @@ typedef union {
     identifier Identifier;
 } walk_node_ty;
 
-typedef bool (*AST_WALKER_CALLBACK)(walk_kind_ty, walk_node_ty, expr_context_ty, void *userdata);
+typedef enum _callback_kind {
+    CallbackEarly_kind,
+    CallbackLate_kind,
+    CallbackSingle_kind
+} callback_kind_ty;
+
+typedef bool (*AST_WALKER_CALLBACK)(walk_kind_ty, walk_node_ty, expr_context_ty, void *userdata, callback_kind_ty);
 
 bool ast_walker_expr(expr_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);
 bool ast_walker_stmt(stmt_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);

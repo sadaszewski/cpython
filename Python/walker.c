@@ -27,7 +27,7 @@ static bool ast_walker_expr_seq(asdl_expr_seq *seq, EXTRAS) {
 static bool ast_walker_identifier(identifier id, EXTRAS) {
     CHECK_NULL(id);
     walk_node_ty walk_node = { .Identifier = id };
-    return callback(WalkIdentifier_kind, walk_node, ctx, userdata);
+    return callback(WalkIdentifier_kind, walk_node, ctx, userdata, CallbackSingle_kind);
 }
 
 static bool ast_walker_arg(arg_ty arg, EXTRAS) {
@@ -98,6 +98,12 @@ static bool ast_walker_keyword_seq(asdl_keyword_seq *seq, EXTRAS) {
 
 bool ast_walker_expr(expr_ty node, EXTRAS) {
     CHECK_NULL(node);
+
+    walk_node_ty walk_node = { .Expr = node };
+    if (!callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackEarly_kind)) {
+        return false;
+    }
+
     bool res = true;
     switch (node->kind) {
         case BoolOp_kind:
@@ -241,10 +247,7 @@ bool ast_walker_expr(expr_ty node, EXTRAS) {
         return false;
     }
 
-    walk_node_ty walk_node = { .Expr = node };
-    res &= callback(WalkExpr_kind, walk_node, ctx, userdata);
-
-    return res;
+    return callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackLate_kind);
 }
 
 bool ast_walker_stmt(stmt_ty node, EXTRAS);
@@ -429,6 +432,12 @@ static bool ast_walker_alias_seq(asdl_alias_seq *seq, EXTRAS) {
 
 bool ast_walker_stmt(stmt_ty node, EXTRAS) {
     CHECK_NULL(node);
+
+    walk_node_ty walk_node = { .Stmt = node };
+    if (!callback(WalkStmt_kind, walk_node, ctx, userdata, CallbackEarly_kind)) {
+        return false;
+    }
+
     bool res = true;
     switch (node->kind) {
         case FunctionDef_kind:
@@ -601,14 +610,17 @@ bool ast_walker_stmt(stmt_ty node, EXTRAS) {
         return false;
     }
 
-    walk_node_ty walk_node = { .Stmt = node };
-    res &= callback(WalkStmt_kind, walk_node, ctx, userdata);
-
-    return res;
+    return callback(WalkStmt_kind, walk_node, ctx, userdata, CallbackLate_kind);
 }
 
 bool ast_walker_mod(mod_ty mod, EXTRAS) {
     CHECK_NULL(mod);
+
+    walk_node_ty walk_node = { .Mod = mod };
+    if (!callback(WalkMod_kind, walk_node, ctx, userdata, CallbackEarly_kind)) {
+        return false;
+    }
+
     bool res = true;
     switch (mod->kind) {
         case Module_kind:
@@ -632,9 +644,7 @@ bool ast_walker_mod(mod_ty mod, EXTRAS) {
         return false;
     }
 
-    walk_node_ty walk_node = { .Mod = mod };
-    res &= callback(WalkMod_kind, walk_node, ctx, userdata);
-    return res;
+    return callback(WalkMod_kind, walk_node, ctx, userdata, CallbackLate_kind);
 }
 
 bool ast_walker(walk_kind_ty kind, walk_node_ty node, EXTRAS) {

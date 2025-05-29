@@ -109,8 +109,28 @@ application domains.
 Rationale
 =========
 
-The associativity has been selected to match the associativity of R's ``|>`` operator.
+The associativity has been selected to match the `associativity <https://stat.ethz.ch/R-manual/R-devel/library/base/html/Syntax.html>`_
+of R's ``|>`` operator.
 
+The left-hand-side and right-hand-side of the ``|>`` operator are allowed to be any valid Python expression
+to provide similar expressivity as the `Smart Pipelines <https://github.com/tc39/proposal-smart-pipelines>`_
+proposal for ECMAScript.
+
+The AST transformation into a series of lambda expressions has been selected as the implementation method due
+its versatility and robustness. The transformation happens after the AST optimization step and before building
+the Symtable. This execution point is optimal for ensuring timely processing of the pipeline syntax before
+Symtable building and bytecode generation.
+
+The value of the LHS is passed to the RHS using the ``_`` identifier in order to retain familiar
+appearance and not to introduce any new symbols beyond the ``|>`` token. The implementation method mentioned above
+allows to retain the value of ``_`` in the surrounding scope.
+
+The argument injection behavior to the leftmost call on the RHS has been selected to avoid any ambiguity
+and allow immediate identification of the call receiving the LHS value. The presence of the injection behavior
+exclusively in the absence of the ``_`` identifier **anywhere** on the RHS eliminates any and all ambiguity
+about this special behavior that could be introduced if the ``_`` identifier were overwritten on the RHS using
+the ``:=`` operator. The latter remains valid and fuctional syntax, however - by definition - desactivates
+the injection behavior.
 
 Specification
 =============
@@ -146,6 +166,52 @@ evaluates to ``3`` and
     2 |> pow(2) + 3 |> pow(2) 
 
 evaluates to ``12``.
+
+The left hand-side and the right-hand side of the pipeline token can be any valid Python
+expressions, provided that parentheses are used to enforce the desired grouping taking into
+account the associativity rules mentioned above. This means that the following is valid:
+
+.. code-block:: python
+
+    [1] |> (_ + [2, 3]) |> [ x ** 2 for x in _ ] |> (x + 1 for x in _) |> map(str) |> ", ".join() |> _.center(10)
+
+and produces ``' 2, 5, 10 '``.
+
+Under the hood, the implementation performs the following transformation. From:
+
+.. code-block:: python
+
+    [1, 2, 3] |> [ x ** 2 for x in _ ] |> map(str) |> ", ".join() |> print()
+
+To:
+
+.. code-block:: python
+
+    (lambda _: print(_))(
+        (lambda _: ", ".join(_))(
+            (lambda _: map(str, _))(
+                (lambda _: [ x ** 2 for x in _ ])(
+                    [1, 2, 3]
+                )
+            )
+        )
+    )
+
+Therefore, the identifier ``_`` is used to pass the value of the LHS to the RHS. Since every RHS is
+encapsulated in a lambda expression, the ``_`` identifier in the surrounding scope of the pipeline is never
+overwritten.
+
+Furthermore, the pipeline expression features a special behavior when the ``_`` identifier is
+**not** present **anywhere** on the RHS and at least one ``Call`` is present on the RHS. In this scenario
+the ``_`` identifier is injected as the last positional argument to the **leftmost** call on the RHS.
+For example, in:
+
+.. code-block:: python
+
+    123 |> 2 ** pow(2, pow(3, 3))
+
+the value ``123`` will be injected as the ``mod`` argument to the outer ``pow`` call on the RHS resulting
+in the value ``32``.
 
 Backwards Compatibility
 =======================

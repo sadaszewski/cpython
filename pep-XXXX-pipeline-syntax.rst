@@ -139,7 +139,7 @@ How to Teach This
 Reference Implementation
 ========================
 
-The idea is currently implemented in the following `repository <https://github.com/sadaszewski/cpython-pipeline-syntax)>`_.
+The idea is currently implemented in the following `repository <https://github.com/sadaszewski/cpython-pipeline-syntax>`_.
 The implementation is fully functional according to the design specified above with good
 code quality. Tests are missing.
 

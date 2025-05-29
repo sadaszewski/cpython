@@ -5,21 +5,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 
-typedef enum _walk_kind {
-    WalkExpr_kind,
-    WalkStmt_kind,
-    WalkMod_kind,
-    WalkIdentifier_kind
-} walk_kind_ty;
-
-typedef union {
-    expr_ty Expr;
-    stmt_ty Stmt;
-    mod_ty Mod;
-    identifier Identifier;
-} walk_node_ty;
-
-typedef bool (*AST_WALKER_CALLBACK)(walk_kind_ty, walk_node_ty, expr_context_ty, void *userdata);
+#include "pycore_walker.h"
 
 #define EXTRAS expr_context_ty ctx, AST_WALKER_CALLBACK callback, void *userdata
 #define EXTRA_3 ctx, callback, userdata
@@ -27,7 +13,7 @@ typedef bool (*AST_WALKER_CALLBACK)(walk_kind_ty, walk_node_ty, expr_context_ty,
 
 #define CHECK_NULL(x) if ((x) == NULL) { return true; }
 
-static bool ast_walker_expr(expr_ty node, EXTRAS);
+bool ast_walker_expr(expr_ty node, EXTRAS);
 
 static bool ast_walker_expr_seq(asdl_expr_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
@@ -110,7 +96,7 @@ static bool ast_walker_keyword_seq(asdl_keyword_seq *seq, EXTRAS) {
     return true;
 }
 
-static bool ast_walker_expr(expr_ty node, EXTRAS) {
+bool ast_walker_expr(expr_ty node, EXTRAS) {
     CHECK_NULL(node);
     bool res = true;
     switch (node->kind) {
@@ -261,7 +247,7 @@ static bool ast_walker_expr(expr_ty node, EXTRAS) {
     return res;
 }
 
-static bool ast_walker_stmt(stmt_ty node, EXTRAS);
+bool ast_walker_stmt(stmt_ty node, EXTRAS);
 
 static bool ast_walker_stmt_seq(asdl_stmt_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
@@ -292,6 +278,7 @@ static bool ast_walker_type_param(type_param_ty node, EXTRAS) {
                 ast_walker_expr(node->v.TypeVarTuple.default_value, EXTRA_3)
             );
     }
+    return true;
 }
 
 static bool ast_walker_type_param_seq(asdl_type_param_seq *seq, EXTRAS) {
@@ -380,6 +367,7 @@ static bool ast_walker_pattern(pattern_ty node, EXTRAS) {
                 ast_walker_pattern_seq(node->v.MatchOr.patterns, EXTRA_3)
             );
     }
+    return true;
 }
 
 static bool ast_walker_matchcase(match_case_ty node, EXTRAS) {
@@ -410,6 +398,7 @@ static bool ast_walker_exc_handler(excepthandler_ty node, EXTRAS) {
                 ast_walker_stmt_seq(node->v.ExceptHandler.body, EXTRA_3)
             );
     }
+    return true;
 }
 
 static bool ast_walker_exc_handler_seq(asdl_excepthandler_seq *seq, EXTRAS) {
@@ -438,7 +427,7 @@ static bool ast_walker_alias_seq(asdl_alias_seq *seq, EXTRAS) {
     return true;
 }
 
-static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
+bool ast_walker_stmt(stmt_ty node, EXTRAS) {
     CHECK_NULL(node);
     bool res = true;
     switch (node->kind) {
@@ -618,7 +607,7 @@ static bool ast_walker_stmt(stmt_ty node, EXTRAS) {
     return res;
 }
 
-static bool ast_walker_mod(mod_ty mod, EXTRAS) {
+bool ast_walker_mod(mod_ty mod, EXTRAS) {
     CHECK_NULL(mod);
     bool res = true;
     switch (mod->kind) {
@@ -648,7 +637,7 @@ static bool ast_walker_mod(mod_ty mod, EXTRAS) {
     return res;
 }
 
-static bool ast_walker(walk_kind_ty kind, walk_node_ty node, EXTRAS) {
+bool ast_walker(walk_kind_ty kind, walk_node_ty node, EXTRAS) {
     switch(kind) {
     case WalkExpr_kind:
         CHECK_NULL(node.Expr);
@@ -663,4 +652,5 @@ static bool ast_walker(walk_kind_ty kind, walk_node_ty node, EXTRAS) {
         CHECK_NULL(node.Identifier);
         return ast_walker_identifier(node.Identifier, EXTRA_3);
     }
+    return true;
 }

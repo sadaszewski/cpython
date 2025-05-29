@@ -19,7 +19,7 @@ Pipeline syntax is a way to structure code so that the output of one operation i
 input to the next, forming a clear and linear "pipeline" of data transformations. This style improves
 readability and simplicity compared to deeply nested function calls. 
 Linear series of data transformations are prevalent in image processing, deep learning and data science.
-This proposal outlines syntax, rules and implementation of a pipeline expression in Python.
+This proposal details syntax, semantics and implementation of a pipeline expression in Python.
 We demonstrate that a dedicated syntax for pipelining benefits readability, expressivity and maintainability
 of the code in the abovementioned scenarios and beyond.
 
@@ -109,14 +109,43 @@ application domains.
 Rationale
 =========
 
-[Describe why particular design decisions were made.]
+The associativity has been selected to match the associativity of R's ``|>`` operator.
 
 
 Specification
 =============
 
-[Describe the syntax and semantics of any new language feature.]
+The syntax is modified as follows:
 
+.. code-block:: peg
+
+    term[expr_ty]:
+        | a=term '*' b=pipeline { _PyAST_BinOp(a, Mult, b, EXTRA) }
+        | a=term '/' b=pipeline { _PyAST_BinOp(a, Div, b, EXTRA) }
+        | a=term '//' b=pipeline { _PyAST_BinOp(a, FloorDiv, b, EXTRA) }
+        | a=term '%' b=pipeline { _PyAST_BinOp(a, Mod, b, EXTRA) }
+        | a=term '@' b=pipeline { CHECK_VERSION(expr_ty, 5, "The '@' operator is", _PyAST_BinOp(a, MatMult, b, EXTRA)) }
+        | pipeline
+
+    pipeline[expr_ty]:
+        | a=pipeline '|>' b=factor { _PyAST_Pipeline(a, b, EXTRA) }
+        | invalid_factor
+        | factor
+
+The new token has stronger associativity than binary operators ``*``, ``/``, ``//``, ``%`` and ``@`` and weaker associativity
+than binary operator ``**`` and unary operators ``-``, ``+`` and ``~``. This means that:
+
+.. code-block:: python
+
+    -2 ** 2 |> 3
+
+evaluates to ``3`` and
+
+.. code-block:: python
+
+    2 |> pow(2) + 3 |> pow(2) 
+
+evaluates to ``12``.
 
 Backwards Compatibility
 =======================
@@ -146,6 +175,27 @@ code quality. Tests are missing.
 Furthermore, the implementation can be
 `tested online <https://sadaszewski.github.io/python-pipeline-operator/dist/console.html>`_ using a
 Pyodide deployment.
+
+The affected files against ``v3.13.2``:
+
+.. code-block:: diff
+
+    Grammar/Tokens                   |   1 +
+    Grammar/python.gram              |   4 +
+    Include/internal/pycore_walker.h |  40 +++
+    Lib/ast.py                       |   7 +
+    Makefile.pre.in                  |   2 +
+    Parser/Python.asdl               |   2 +
+    Python/ast.c                     |   4 +
+    Python/ast_opt.c                 |   8 +-
+    Python/ast_unparse.c             |   9 +
+    Python/compile.c                 |   7 +
+    Python/pipeline.c                | 123 ++++++++
+    Python/symtable.c                |   4 +
+    Python/walker.c                  | 666 +++++++++++++++++++++++++++++++++++++++
+
+The number of lines in ``walker.c`` and ``pipeline.c`` are purely coincidental
+and I hope they will change. However, I think these are a good omen.
 
 
 Rejected Ideas

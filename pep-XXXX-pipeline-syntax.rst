@@ -7,7 +7,7 @@ Discussions-To: Pending
 Status: Draft
 Type: Standards Track
 Created: 29-05-2025
-Python-Version: 3.13
+Python-Version: 3.13.2
 Post-History: <REQUIRED: dates, in dd-mmm-yyyy format, and corresponding links to PEP discussion threads>
 Resolution: <url>
 
@@ -116,14 +116,14 @@ The left-hand-side and right-hand-side of the ``|>`` operator are allowed to be 
 to provide similar expressivity as the `Smart Pipelines <https://github.com/tc39/proposal-smart-pipelines>`_
 proposal for ECMAScript.
 
-The AST transformation into a series of lambda expressions has been selected as the implementation method due
-its versatility and robustness. The transformation happens after the AST optimization step and before building
-the Symtable. This execution point is optimal for ensuring timely processing of the pipeline syntax before
-Symtable building and bytecode generation.
+The AST transformation into a series of named expressions and calls to identity lambda function has been selected
+as the implementation method due its versatility and robustness. The transformation happens after the AST
+optimization step and before building the Symtable. This execution point is optimal for ensuring timely processing
+of the pipeline syntax before Symtable building and bytecode generation.
 
 The value of the LHS is passed to the RHS using the ``_`` identifier in order to retain familiar
 appearance and not to introduce any new symbols beyond the ``|>`` token. The implementation method mentioned above
-allows to retain the value of ``_`` in the surrounding scope.
+allows to store the intermediate results of the pipeline using named expressions, if so desired.
 
 The argument injection behavior to the leftmost call on the RHS has been selected to avoid any ambiguity
 and allow immediate identification of the call receiving the LHS value. The presence of the injection behavior
@@ -187,19 +187,16 @@ To:
 
 .. code-block:: python
 
-    (lambda _: print(_))(
-        (lambda _: ", ".join(_))(
-            (lambda _: map(str, _))(
-                (lambda _: [ x ** 2 for x in _ ])(
-                    [1, 2, 3]
-                )
-            )
-        )
-    )
+    ((_ := ((_ := ((_ := ((_ := [1, 2, 3]),
+        (lambda _: _)([ x ** 2 for x in _ ]))[1]),
+        (lambda _: _)(map(str, _)))[1]),
+        (lambda _: _)(", ".join(_)))[1]),
+        (lambda _: _)(print(_)))[1]
 
 Therefore, the identifier ``_`` is used to pass the value of the LHS to the RHS. Since every RHS is
-encapsulated in a lambda expression, the ``_`` identifier in the surrounding scope of the pipeline is never
-overwritten.
+wrapped in a call to an identity lambda function, the pipeline can be debugged by stepping into the nested
+calls. The ``_`` identifier in the surrounding scope of the pipeline is overwritten by the results of
+successive pipeline stages as well as by any intermediate named expressions used in the stages.
 
 Furthermore, the pipeline expression features a special behavior when the ``_`` identifier is
 **not** present **anywhere** on the RHS and at least one ``Call`` is present on the RHS. In this scenario
@@ -213,22 +210,57 @@ For example, in:
 the value ``123`` will be injected as the ``mod`` argument to the outer ``pow`` call on the RHS resulting
 in the value ``32``.
 
+Since the transformation keeps both LHS and RHS in the same scope as the whole pipeline, named
+expressions on the LHS or RHS result in assignments to local variables in the surrounding scope.
+For example:
+
+.. code-block:: python
+
+    (
+        (_1 := image) |>
+        (_2 := hist_eq()) |>
+        (_3 := threshold(t=128)) |>
+        (_4 := dilate((3, 3))) |>
+        (_5 := erode((3, 3))) |>
+        (_6 := connected_components())
+    )
+
+will store the input and intermediate results of each pipeline stage respectively in variables
+``_1``, ``_2``, ``_3``, ``_4``, ``_5``, ``_6``.
+
 Backwards Compatibility
 =======================
 
-[Describe potential impact and severity on pre-existing code.]
+Since this proposal is the first one to introduce the ``|>`` token, existing valid Python code
+is not expected to contain it at all. Therefore, the impact on existing code is expected to be none.
+In absence of pipeline expressions, the transformation code does nothing and just adds an additional
+idle pass through the AST on top of the AST optimization and Symtable building passes.
 
 
 Security Implications
 =====================
 
-[How could a malicious user take advantage of this new feature?]
+The new syntax is intuitive and in the long term should improve the readability,
+expressiveness and maintainability of the code, therefore indirectly improve
+the security as well. In the short term, unfamiliar syntax could - on rare occassions -
+lead to confusion among code reviewers and potentially allow malicious actors to contribute
+compromised code which perhaps would not pass the scrutiny if it was written
+without the pipeline syntax. However, this appears as an exotic scenario and currently
+no plausible vectors of attack exist that would render the pipeline expression any more vulnerable
+than the rest of the Python syntax. To mitigate this, we recommend to prominently announce
+the addition of the new syntax and to stress that code reviewers must fully understand
+its semantics before reviewing any code containing pipelines.
 
 
 How to Teach This
 =================
 
-[How to teach users, new and experienced, how to apply the PEP to their work.]
+Additions to Python Documentation and tutorials should explain the new syntax and
+semantics, as well as present the use cases and frequent use patterns. Following the
+publication, we expect broader Internet community to cover the topic on a
+variety of platforms including blogs, streaming services and social media.
+Demonstrations and training during Python conferences and/or dedicated Python training
+courses and/or hackathons are futher promising venues for education.
 
 
 Reference Implementation
@@ -247,7 +279,7 @@ The affected files against ``v3.13.2``:
 .. code-block:: diff
 
     Grammar/Tokens                   |   1 +
-    Grammar/python.gram              |   4 +
+    Grammar/python.gram              |  14 +-
     Include/internal/pycore_walker.h |  40 +++
     Lib/ast.py                       |   7 +
     Makefile.pre.in                  |   2 +
@@ -256,36 +288,33 @@ The affected files against ``v3.13.2``:
     Python/ast_opt.c                 |   8 +-
     Python/ast_unparse.c             |   9 +
     Python/compile.c                 |   7 +
-    Python/pipeline.c                | 123 ++++++++
+    Python/pipeline.c                | 165 ++++++++++
     Python/symtable.c                |   4 +
     Python/walker.c                  | 666 +++++++++++++++++++++++++++++++++++++++
 
-The number of lines in ``walker.c`` and ``pipeline.c`` are purely coincidental
-and I hope they will change. However, I think these are a good omen.
-
+The number of lines in ``walker.c`` is purely coincidental.
 
 Rejected Ideas
 ==============
 
-[Why certain ideas that were brought while discussing this PEP were not ultimately pursued.]
+The idea to implement the pipeline syntax as a binary operator was rejected due to the inability
+to cover multiple use cases described above using this approach. The binary operator approach
+proposed to limit the RHS to partially-applied functions only (i.e. ``partial`` or a new
+implementation of ``partial``).
 
 
 Open Issues
 ===========
 
-[Any points that are still being decided/discussed.]
+There are no open issues regarding the syntax and semantics.
 
-Alternative transformation:
+There are ongoing discussions about the debugging functionality for the pipelines.
 
-.. code-block:: python
+The implementation could potentially be optimized by moving it to the compilation stage.
 
-    ( (_ := ( getattr(locals(), '_', None)  ,(( _:=((_ := [1,2,3]), (_1:=map(str, _)))[1] ), (_2:=", ".join(_)))[1])) )[(_:=_[0], 1)[1]]
-
-
-Footnotes
-=========
-
-[A collection of footnotes cited in the PEP, and a place to list non-inline hyperlink targets.]
+None of the open issues should block the acceptance of this PEP. On the contrary,
+they are to large degree orthogonal concerns, which can be addressed with follow-up PEPs
+if necessary.
 
 
 Copyright

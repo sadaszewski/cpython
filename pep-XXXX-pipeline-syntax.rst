@@ -74,7 +74,7 @@ grasp, modify, or extend a chain of transformations becomes indispensable. A ded
 not only improve visual clarity and maintainability but also facilitate debugging by clearly delineating each 
 transformation step. 
 
-An additional comment about debugging seems in order here. With the pipeline syntax, three powerful techniques
+An additional comment about debugging seems in order here. With the pipeline syntax, four powerful techniques
 immediately come to mind. Given the following pipeline:
 
 .. code-block:: python
@@ -93,6 +93,8 @@ one can:
 1. manually set a breakpoint at any line,
 2. insert a function call taking ``*args, **kwargs`` and triggering a breakpoint,
 3. temporarily break the pipeline into one or more temporary assignments.
+4. wrap each pipeline stage in a named expression like ``(_3 := threshold(t=128))``
+   to capture the intermediate results in local variables
 
 This selection should satisfy the criteria of debugging practicality.
 

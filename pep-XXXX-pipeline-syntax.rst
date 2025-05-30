@@ -275,6 +275,12 @@ Open Issues
 
 [Any points that are still being decided/discussed.]
 
+Alternative transformation:
+
+.. code-block:: python
+
+    ( (_ := ( getattr(locals(), '_', None)  ,(( _:=((_ := [1,2,3]), (_1:=map(str, _)))[1] ), (_2:=", ".join(_)))[1])) )[(_:=_[0], 1)[1]]
+
 
 Footnotes
 =========

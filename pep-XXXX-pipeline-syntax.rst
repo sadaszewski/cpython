@@ -111,6 +111,12 @@ application domains.
 Rationale
 =========
 
+In most programming languages, the pipeline syntax allows only to use a call as the RHS. We support that use case and
+additionally handle arbitrary Python expressions as the RHS. The expressions and calls on the RHS contrast
+with callables, which would require additional wrapping. We employ the former as it is more intuitive and
+aligns with the general practice in other languages. Furthermore, this approach allows to seamlessly combine
+pipelining with method chaining.
+
 The associativity has been selected to match the `associativity <https://stat.ethz.ch/R-manual/R-devel/library/base/html/Syntax.html>`_
 of R's ``|>`` operator.
 
@@ -229,6 +235,20 @@ For example:
 
 will store the input and intermediate results of each pipeline stage respectively in variables
 ``_1``, ``_2``, ``_3``, ``_4``, ``_5``, ``_6``.
+
+Importantly, the proposed pipeline syntax allows to seamlessly combine pipelining with method chaining:
+
+.. code-block:: python
+
+    (
+        pd.read_csv("my_file") |>
+        _.query("A > B").filter(items=["A"])
+         .to_numpy().flatten().tolist() |>
+        map(lambda x: x + 2) |>
+        list() |>
+        np.array() |>
+        _.prod()
+    )
 
 Backwards Compatibility
 =======================

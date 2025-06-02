@@ -49,7 +49,7 @@ static bool walk_replace_pipelines_callback(
     walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
     void *arena, callback_kind_ty cb_kind
 ) {
-    if (cb_kind == CallbackLate_kind && kind == WalkExpr_kind && node.Expr->kind == Pipeline_kind) {
+    if (cb_kind == CallbackEarly_kind && kind == WalkExpr_kind && node.Expr->kind == Pipeline_kind) {
         transform_pipeline(node.Expr, arena);
     }
     return true;
@@ -178,6 +178,10 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
 static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     expr_ty lhs = node->v.Pipeline.left;
     expr_ty rhs = node->v.Pipeline.right;
+
+    ast_walker_expr(lhs, Load, walk_replace_pipelines_callback, arena); // need to visit both sides manually
+    ast_walker_expr(rhs, Load, walk_replace_pipelines_callback, arena); // since we are running in early callback
+
     expr_ty rhs_leftmost_call = leftmost_call(rhs, NULL);
 
     expr_ty rhs_wrapped = wrap_in_lambda(rhs, arena);

@@ -12,6 +12,7 @@ typedef struct _search_track {
     int depth;
     bool used;
     bool overwritten;
+    int shadowed;
 } *search_track_ty;
 
 static void search_track_init(search_track_ty search_track);
@@ -207,6 +208,13 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     search_track_init(&search_track);
     if (rhs_leftmost_call != NULL) {
         placeholder_use_info(rhs_leftmost_call, &search_track);
+        /* printf(
+            "placeholder_use_info(), depth: %d, overwritten: %d, used: %d, shadowed: %d\n",
+            search_track.depth,
+            (int) search_track.overwritten,
+            (int) search_track.used,
+            (int) search_track.shadowed
+        ); */
     }
 
     if (
@@ -231,6 +239,23 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     return 1;
 }
 
+static bool find_placeholder_callback(
+    walk_kind_ty kind,
+    walk_node_ty node,
+    expr_context_ty ctx,
+    void *userdata,
+    callback_kind_ty cb_kind
+) {
+    if (
+        cb_kind == CallbackSingle_kind &&
+        kind == WalkIdentifier_kind &&
+        _PyUnicode_EqualToASCIIString(node.Identifier, "_")
+    ) {
+        return false;
+    }
+    return true;
+}
+
 static bool placeholder_use_info_callback(
     walk_kind_ty kind,
     walk_node_ty node,
@@ -240,14 +265,32 @@ static bool placeholder_use_info_callback(
 ) {
     search_track_ty search_track = (search_track_ty) userdata;
 
+    /* printf(
+        "placeholder_use_info_callback(), kind: %d, node.Expr->kind: %d, ctx: %d, cb_kind: %d, depth: %d, overwritten: %d, used: %d, shadowed: %d\n",
+        (int) kind,
+        (int) node.Expr->kind,
+        (int) ctx,
+        (int) cb_kind,
+        (int) search_track->depth,
+        (int) search_track->overwritten,
+        (int) search_track->used,
+        (int) search_track->shadowed
+    ); */
+
     if (
         kind == WalkExpr_kind &&
         node.Expr->kind == Lambda_kind
     ) {
         if (cb_kind == CallbackEarly_kind) {
             search_track->depth++;
+            if (!ast_walker_arguments(node.Expr->v.Lambda.args, Load, find_placeholder_callback, NULL)) {
+                search_track->shadowed++;
+            }
         } else if (cb_kind == CallbackLate_kind) {
             search_track->depth--;
+            if (!ast_walker_arguments(node.Expr->v.Lambda.args, Load, find_placeholder_callback, NULL)) {
+                search_track->shadowed--;
+            }
         }
     }
 
@@ -258,7 +301,7 @@ static bool placeholder_use_info_callback(
         node.Expr->v.Name.ctx == Load &&
         _PyUnicode_EqualToASCIIString(node.Expr->v.Name.id, "_")
     ) {
-        if (!search_track->overwritten) {
+        if (!search_track->overwritten && !search_track->shadowed) {
             search_track->used = true;
         }
     }
@@ -279,9 +322,10 @@ static void search_track_init(search_track_ty search_track) {
     search_track->depth = 0;
     search_track->used = false;
     search_track->overwritten = false;
+    search_track->shadowed = 0;
 }
 
 static bool placeholder_use_info(expr_ty node, search_track_ty search_track) {
     search_track_init(search_track);
-    return ast_walker_expr(node, Load, placeholder_use_info_callback, &search_track);
+    return ast_walker_expr(node, Load, placeholder_use_info_callback, search_track);
 }

@@ -47,7 +47,7 @@ static bool ast_walker_arg_seq(asdl_arg_seq *seq, EXTRAS) {
     return true;
 }
 
-static bool ast_walker_arguments(arguments_ty args, EXTRAS) {
+bool ast_walker_arguments(arguments_ty args, EXTRAS) {
     CHECK_NULL(args);
     return (
         ast_walker_arg_seq(args->posonlyargs, EXTRA_3) &&

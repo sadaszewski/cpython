@@ -841,7 +841,9 @@ append_named_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
 }
 
 static int append_ast_pipeline(_PyUnicodeWriter *writer, expr_ty e) {
-    APPEND_EXPR(e->v.Pipeline.left, PR_AWAIT);
+    if (e->v.Pipeline.left != NULL) {
+        APPEND_EXPR(e->v.Pipeline.left, PR_AWAIT);
+    }
     APPEND_STR(" |> ");
     APPEND_EXPR(e->v.Pipeline.right, PR_AWAIT);
     return 0;

@@ -988,9 +988,12 @@ class _Unparser(NodeVisitor):
         self.interleave(lambda: self.write(", "), self.write, node.names)
 
     def visit_Pipeline(self, node):
-        self.set_precedence(_Precedence.AWAIT, node.left)
-        self.traverse(node.left)
-        self.write(" |> ")
+        if node.left is not None:
+            self.set_precedence(_Precedence.AWAIT, node.left)
+            self.traverse(node.left)
+            self.write(" |> ")
+        else:
+            self.write("|> ")
         self.set_precedence(_Precedence.AWAIT, node.right)
         self.traverse(node.right)
 

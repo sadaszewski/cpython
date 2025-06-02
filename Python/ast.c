@@ -274,8 +274,11 @@ validate_expr(struct validator *state, expr_ty exp, expr_context_ty ctx)
             validate_expr(state, exp->v.BinOp.right, Load);
         break;
     case Pipeline_kind:
-        ret = validate_expr(state, exp->v.Pipeline.left, Load) &&
-            validate_expr(state, exp->v.Pipeline.right, Load);
+        ret = 1;
+        if (exp->v.Pipeline.left != NULL) {
+            ret &= validate_expr(state, exp->v.Pipeline.left, Load);
+        }
+        ret &= validate_expr(state, exp->v.Pipeline.right, Load);
         break;
     case UnaryOp_kind:
         ret = validate_expr(state, exp->v.UnaryOp.operand, Load);

@@ -112,7 +112,76 @@ static expr_ty wrap_in_lambda(expr_ty node, PyArena *arena) {
 #undef CHECK_NULL
 #define CHECK_NULL(x) if ((x) == NULL) return 0;
 
+static int transform_pipeline_instance(expr_ty node, PyArena *arena);
+static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyArena *arena);
+
 static int transform_pipeline(expr_ty node, PyArena *arena) {
+    int count = 0;
+    expr_ty tmp = node;
+    expr_ty leftmost = node;
+    while (tmp != NULL && tmp->kind == Pipeline_kind) {
+        count++;
+        leftmost = tmp;
+        tmp = tmp->v.Pipeline.left;
+    }
+    asdl_expr_seq *seq = _Py_asdl_expr_seq_new(count, arena);
+    CHECK_NULL(seq);
+    tmp = node;
+    for (int i = count - 1; i >= 0; i--) {
+        asdl_seq_SET(seq, i, tmp->v.Pipeline.right);
+        tmp = tmp->v.Pipeline.left;
+    }
+    if (leftmost->v.Pipeline.left == NULL) {
+        // pipeline
+        return transform_autolambda(node, seq, count, arena);
+    } else {
+        // pipeline instance
+        return transform_pipeline_instance(node, arena);
+    }
+}
+
+static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyArena *arena) {
+    identifier placeholder = _PyUnicode_FromId(&PyID__);
+    CHECK_NULL(placeholder);
+    arg_ty a = _PyAST_arg(placeholder, NULL, NULL, EXTRAS(node), arena);
+    CHECK_NULL(a);
+    asdl_arg_seq *args = _Py_asdl_arg_seq_new(1, arena);
+    CHECK_NULL(args);
+    asdl_seq_SET(args, 0, a);
+    arguments_ty arguments = _PyAST_arguments(NULL, args, NULL, NULL, NULL, NULL, NULL, arena);
+    CHECK_NULL(arguments);
+
+    expr_ty placeholder_e = _PyAST_Name(placeholder, Store, EXTRAS(node), arena);
+    CHECK_NULL(placeholder_e);
+    asdl_expr_seq *elts = _Py_asdl_expr_seq_new(count, arena);
+    CHECK_NULL(elts);
+    for (int i = 0; i < count; i++) {
+        expr_ty e = _PyAST_NamedExpr(placeholder_e, asdl_seq_GET(seq, i), EXTRAS(node), arena);
+        CHECK_NULL(e);
+        asdl_seq_SET(elts, i, e);
+    }
+    expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(node), arena);
+    CHECK_NULL(tuple);
+
+    PyObject *minus_one = PyLong_FromLong(-1);
+    if (_PyArena_AddPyObject(arena, minus_one) < 0) {
+        Py_DecRef(minus_one);
+        return -1;
+    }
+    expr_ty minus_one_e = _PyAST_Constant(minus_one, NULL, EXTRAS(node), arena);
+    CHECK_NULL(minus_one_e);
+
+    expr_ty subscript = _PyAST_Subscript(tuple, minus_one_e, Load, EXTRAS(node), arena);
+    CHECK_NULL(subscript);
+
+    node->kind = Lambda_kind;
+    node->v.Lambda.args = arguments;
+    node->v.Lambda.body = subscript;
+
+    return 1;
+}
+
+static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     expr_ty lhs = node->v.Pipeline.left;
     expr_ty rhs = node->v.Pipeline.right;
     expr_ty rhs_leftmost_call = leftmost_call(rhs, NULL);

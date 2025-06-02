@@ -806,6 +806,7 @@ term[expr_ty]:
     | pipeline
 
 pipeline[expr_ty]:
+    | '|>' b=factor { _PyAST_Pipeline(NULL, b, EXTRA) }
     | a=pipeline '|>' b=factor { _PyAST_Pipeline(a, b, EXTRA) }
     | invalid_factor
     | factor

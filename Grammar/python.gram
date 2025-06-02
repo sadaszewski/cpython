@@ -806,8 +806,11 @@ term[expr_ty]:
     | pipeline
 
 pipeline[expr_ty]:
+    | a=pipeline '|>' b=autolambda { _PyAST_Pipeline(a, b, EXTRA) }
+    | autolambda
+
+autolambda[expr_ty]:
     | '|>' b=factor { _PyAST_Pipeline(NULL, b, EXTRA) }
-    | a=pipeline '|>' b=factor { _PyAST_Pipeline(a, b, EXTRA) }
     | invalid_factor
     | factor
 

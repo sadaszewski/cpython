@@ -8,6 +8,14 @@
 
 #define EXTRAS(x) (x)->lineno, (x)->col_offset, (x)->end_lineno, (x)->end_col_offset
 
+typedef struct _search_track {
+    int depth;
+    bool used;
+    bool overwritten;
+} *search_track_ty;
+
+static void search_track_init(search_track_ty search_track);
+static bool placeholder_use_info(expr_ty node, search_track_ty search_track);
 static bool leftmost_call_callback(walk_kind_ty, walk_node_ty, expr_context_ty, void*, callback_kind_ty);
 
 static bool leftmost_call_callback(
@@ -32,21 +40,6 @@ static expr_ty leftmost_call(expr_ty e, expr_ty c) {
     expr_ty found = NULL;
     ast_walker_expr(e, Load, leftmost_call_callback, &found);
     return found;
-}
-
-static bool find_placeholder_callback(
-    walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
-    void *userdata, callback_kind_ty cb_kind
-) {
-    if (cb_kind == CallbackSingle_kind && kind == WalkIdentifier_kind && _PyUnicode_EqualToASCIIString(node.Identifier, "_")) {
-        return false;
-    }
-    return true;
-}
-
-static bool contains_placeholder(expr_ty node) {
-    bool res = !ast_walker_expr(node, Load, find_placeholder_callback, NULL);
-    return res;
 }
 
 static int transform_pipeline(expr_ty node, PyArena *arena);
@@ -185,7 +178,6 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     expr_ty lhs = node->v.Pipeline.left;
     expr_ty rhs = node->v.Pipeline.right;
     expr_ty rhs_leftmost_call = leftmost_call(rhs, NULL);
-    bool placeholder_found = contains_placeholder(node->v.Pipeline.right);
 
     expr_ty rhs_wrapped = wrap_in_lambda(rhs, arena);
     CHECK_NULL(rhs_wrapped);
@@ -211,8 +203,14 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     node->v.Subscript.ctx = Load;
 
     // Handle injection
+    struct _search_track search_track;
+    search_track_init(&search_track);
+    if (rhs_leftmost_call != NULL) {
+        placeholder_use_info(rhs_leftmost_call, &search_track);
+    }
+
     if (
-        !placeholder_found
+        !search_track.used
         && rhs_leftmost_call != NULL
         /* && asdl_seq_LEN(rhs_leftmost_call->v.Call.args) == 0
         && asdl_seq_LEN(rhs_leftmost_call->v.Call.keywords) == 0 */
@@ -231,4 +229,59 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
     }
 
     return 1;
+}
+
+static bool placeholder_use_info_callback(
+    walk_kind_ty kind,
+    walk_node_ty node,
+    expr_context_ty ctx,
+    void *userdata,
+    callback_kind_ty cb_kind
+) {
+    search_track_ty search_track = (search_track_ty) userdata;
+
+    if (
+        kind == WalkExpr_kind &&
+        node.Expr->kind == Lambda_kind
+    ) {
+        if (cb_kind == CallbackEarly_kind) {
+            search_track->depth++;
+        } else if (cb_kind == CallbackLate_kind) {
+            search_track->depth--;
+        }
+    }
+
+    if (
+        cb_kind == CallbackLate_kind &&
+        kind == WalkExpr_kind &&
+        node.Expr->kind == Name_kind &&
+        node.Expr->v.Name.ctx == Load &&
+        _PyUnicode_EqualToASCIIString(node.Expr->v.Name.id, "_")
+    ) {
+        if (!search_track->overwritten) {
+            search_track->used = true;
+        }
+    }
+
+    if (
+        kind == WalkIdentifier_kind &&
+        _PyUnicode_EqualToASCIIString(node.Identifier, "_") &&
+        ctx == Store &&
+        search_track->depth == 0
+    ) {
+        search_track->overwritten = true;
+    }
+
+    return true;
+}
+
+static void search_track_init(search_track_ty search_track) {
+    search_track->depth = 0;
+    search_track->used = false;
+    search_track->overwritten = false;
+}
+
+static bool placeholder_use_info(expr_ty node, search_track_ty search_track) {
+    search_track_init(search_track);
+    return ast_walker_expr(node, Load, placeholder_use_info_callback, &search_track);
 }

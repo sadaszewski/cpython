@@ -19,7 +19,7 @@ static void search_track_init(search_track_ty search_track);
 static bool placeholder_use_info(expr_ty node, search_track_ty search_track);
 static bool leftmost_call_callback(walk_kind_ty, walk_node_ty, expr_context_ty, void*, callback_kind_ty);
 static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *arena);
-static int handle_magic_method(expr_ty rhs, identifier placeholder_id, PyArena *arena);
+static int handle_magic_method(expr_ty rhs, identifier placeholder_id, bool last, PyArena *arena);
 
 static bool leftmost_call_callback(
     walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
@@ -124,7 +124,7 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
         if (!handle_injection(e, placeholder, arena)) {
             return 0;
         }
-        if (!handle_magic_method(e, placeholder, arena)) {
+        if (!handle_magic_method(e, placeholder, (i == count - 1), arena)) {
             return 0;
         }
         e = _PyAST_NamedExpr(placeholder_e, e, EXTRAS(node), arena);
@@ -211,7 +211,7 @@ static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr
         if (!handle_injection(asdl_seq_GET(seq, i), placeholder_id, arena)) {
             return 0;
         }
-        if (!handle_magic_method(asdl_seq_GET(seq, i), placeholder_id, arena)) {
+        if (!handle_magic_method(asdl_seq_GET(seq, i), placeholder_id, (i == count - 1), arena)) {
             return 0;
         }
     }
@@ -340,7 +340,7 @@ static bool placeholder_use_info(expr_ty node, search_track_ty search_track) {
 static _Py_Identifier PyID_hasattr = { .string = "hasattr", .index = -1 };
 static _Py_Identifier PyID___pipe__ = { .string = "__pipe__", .index = -1 };
 
-static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, PyArena *arena) {
+static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool last, PyArena *arena) {
 
     expr_ty rhs = (expr_ty) _PyArena_Malloc(arena, sizeof(*rhs));
     CHECK_NULL(rhs);
@@ -373,9 +373,14 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, PyAr
     CHECK_NULL(arguments);
     expr_ty lambda = _PyAST_Lambda(arguments, rhs, EXTRAS(rhs), arena);
     CHECK_NULL(lambda);
-    asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(1, arena);
+    PyObject *last_c = Py_GetConstant(last ? Py_CONSTANT_TRUE : Py_CONSTANT_FALSE)
+    CHECK_NULL(last_c);
+    expr_ty last_e = _PyAST_Constant(last_c, NULL, EXTRAS(rhs), arena);
+    CHECK_NULL(last_e);
+    asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(2, arena);
     CHECK_NULL(magic_args);
     asdl_seq_SET(magic_args, 0, lambda);
+    asdl_seq_SET(magic_args, 1, last_e);
     expr_ty call_magic_method = _PyAST_Attribute(placeholder, magic_id, Load, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
     call_magic_method = _PyAST_Call(call_magic_method, magic_args, NULL, EXTRAS(rhs), arena);

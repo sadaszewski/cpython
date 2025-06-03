@@ -76,6 +76,7 @@ static _Py_Identifier PyID__ = { .string = "_", .index = -1 };
 
 #define CHECK_NULL(x) if ((x) == NULL) { return NULL; }
 
+#if 0
 static expr_ty wrap_in_lambda(expr_ty node, PyArena *arena) {
     arguments_ty arguments = (arguments_ty) _PyArena_Malloc(arena, sizeof(*arguments));
     CHECK_NULL(arguments);
@@ -104,11 +105,12 @@ static expr_ty wrap_in_lambda(expr_ty node, PyArena *arena) {
 
     return call;
 }
+#endif
 
 #undef CHECK_NULL
 #define CHECK_NULL(x) if ((x) == NULL) return 0;
 
-static int transform_pipeline_instance(expr_ty node, PyArena *arena);
+static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena);
 static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyArena *arena);
 
 static int transform_pipeline(expr_ty node, PyArena *arena) {
@@ -132,7 +134,7 @@ static int transform_pipeline(expr_ty node, PyArena *arena) {
         return transform_autolambda(node, seq, count, arena);
     } else {
         // pipeline instance
-        return transform_pipeline_instance(node, arena);
+        return transform_pipeline_instance(node, leftmost, seq, count, arena);
     }
 }
 
@@ -224,7 +226,62 @@ static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *are
     return 1;
 }
 
-static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
+static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena) {
+    if (!ast_walker_expr(leftmost->v.Pipeline.left, Load, walk_replace_pipelines_callback, arena)) {
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        if (!ast_walker_expr(asdl_seq_GET(seq, i), Load, walk_replace_pipelines_callback, arena)) {
+            return 0;
+        }
+    }
+
+    identifier placeholder_id = _PyUnicode_FromId(&PyID__);
+    CHECK_NULL(placeholder_id);
+    expr_ty placeholder = _PyAST_Name(placeholder_id, Store, EXTRAS(node), arena);
+    CHECK_NULL(placeholder);
+
+    for (int i = 0; i < count; i++) {
+        if (!handle_injection(asdl_seq_GET(seq, i), placeholder_id, arena)) {
+            return 0;
+        }
+        if (!handle_magic_method(asdl_seq_GET(seq, i), placeholder_id, arena)) {
+            return 0;
+        }
+    }
+
+    asdl_expr_seq *elts = _Py_asdl_expr_seq_new(count + 1, arena);
+    CHECK_NULL(elts);
+    expr_ty assignment = _PyAST_NamedExpr(placeholder, leftmost->v.Pipeline.left, EXTRAS(node), arena);
+    CHECK_NULL(assignment);
+    asdl_seq_SET(elts, 0, assignment);
+    for (int i = 0; i < count; i++) {
+        assignment = _PyAST_NamedExpr(placeholder, asdl_seq_GET(seq, i), EXTRAS(node), arena);
+        CHECK_NULL(assignment);
+        asdl_seq_SET(elts, i + 1, assignment);
+    }
+    expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(node), arena);
+    CHECK_NULL(tuple);
+
+    PyObject *minus_one = PyLong_FromLong(-1);
+    CHECK_NULL(minus_one);
+    if (_PyArena_AddPyObject(arena, minus_one) < 0) {
+        Py_DecRef(minus_one);
+        return 0;
+    }
+    expr_ty minus_one_e = _PyAST_Constant(minus_one, NULL, EXTRAS(node), arena);
+    CHECK_NULL(minus_one_e);
+
+    node->kind = Subscript_kind;
+    node->v.Subscript.ctx = Load;
+    node->v.Subscript.value = tuple;
+    node->v.Subscript.slice = minus_one_e;
+
+    return 1;
+}
+
+#if 0
+static int transform_pipeline_instance_old(expr_ty node, PyArena *arena) {
     expr_ty lhs = node->v.Pipeline.left;
     expr_ty rhs = node->v.Pipeline.right;
 
@@ -263,6 +320,7 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
 
     return 1;
 }
+#endif
 
 static bool find_placeholder_callback(
     walk_kind_ty kind,

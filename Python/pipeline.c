@@ -175,37 +175,8 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
     return 1;
 }
 
-static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
-    expr_ty lhs = node->v.Pipeline.left;
-    expr_ty rhs = node->v.Pipeline.right;
-
-    ast_walker_expr(lhs, Load, walk_replace_pipelines_callback, arena); // need to visit both sides manually
-    ast_walker_expr(rhs, Load, walk_replace_pipelines_callback, arena); // since we are running in early callback
-
+static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *arena) {
     expr_ty rhs_leftmost_call = leftmost_call(rhs, NULL);
-
-    expr_ty rhs_wrapped = wrap_in_lambda(rhs, arena);
-    CHECK_NULL(rhs_wrapped);
-
-    asdl_expr_seq *elts = _Py_asdl_expr_seq_new(2, arena);
-    CHECK_NULL(elts);
-    identifier placeholder_id = _PyUnicode_FromId(&PyID__);
-    CHECK_NULL(placeholder_id);
-    expr_ty placeholder = _PyAST_Name(placeholder_id, Store, EXTRAS(rhs), arena);
-    CHECK_NULL(placeholder);
-    expr_ty assignment = _PyAST_NamedExpr(placeholder, lhs, EXTRAS(rhs), arena);
-    CHECK_NULL(assignment);
-    asdl_seq_SET(elts, 0, assignment);
-    asdl_seq_SET(elts, 1, rhs_wrapped);
-    expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(rhs), arena);
-    CHECK_NULL(tuple);
-    expr_ty one = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ONE), NULL, EXTRAS(rhs), arena);
-    CHECK_NULL(one);
-
-    node->kind = Subscript_kind;
-    node->v.Subscript.value = tuple;
-    node->v.Subscript.slice = one;
-    node->v.Subscript.ctx = Load;
 
     // Handle injection
     struct _search_track search_track;
@@ -238,6 +209,43 @@ static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
         CHECK_NULL(placeholder);
         asdl_seq_SET(injected_args, n, placeholder);
         rhs_leftmost_call->v.Call.args = injected_args;
+    }
+
+    return 1;
+}
+
+static int transform_pipeline_instance(expr_ty node, PyArena *arena) {
+    expr_ty lhs = node->v.Pipeline.left;
+    expr_ty rhs = node->v.Pipeline.right;
+
+    ast_walker_expr(lhs, Load, walk_replace_pipelines_callback, arena); // need to visit both sides manually
+    ast_walker_expr(rhs, Load, walk_replace_pipelines_callback, arena); // since we are running in early callback
+
+    expr_ty rhs_wrapped = wrap_in_lambda(rhs, arena);
+    CHECK_NULL(rhs_wrapped);
+
+    asdl_expr_seq *elts = _Py_asdl_expr_seq_new(2, arena);
+    CHECK_NULL(elts);
+    identifier placeholder_id = _PyUnicode_FromId(&PyID__);
+    CHECK_NULL(placeholder_id);
+    expr_ty placeholder = _PyAST_Name(placeholder_id, Store, EXTRAS(rhs), arena);
+    CHECK_NULL(placeholder);
+    expr_ty assignment = _PyAST_NamedExpr(placeholder, lhs, EXTRAS(rhs), arena);
+    CHECK_NULL(assignment);
+    asdl_seq_SET(elts, 0, assignment);
+    asdl_seq_SET(elts, 1, rhs_wrapped);
+    expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(tuple);
+    expr_ty one = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ONE), NULL, EXTRAS(rhs), arena);
+    CHECK_NULL(one);
+
+    node->kind = Subscript_kind;
+    node->v.Subscript.value = tuple;
+    node->v.Subscript.slice = one;
+    node->v.Subscript.ctx = Load;
+
+    if (!handle_injection(rhs, placeholder_id, arena)) {
+        return 0;
     }
 
     return 1;

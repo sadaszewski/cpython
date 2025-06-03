@@ -18,6 +18,7 @@ typedef struct _search_track {
 static void search_track_init(search_track_ty search_track);
 static bool placeholder_use_info(expr_ty node, search_track_ty search_track);
 static bool leftmost_call_callback(walk_kind_ty, walk_node_ty, expr_context_ty, void*, callback_kind_ty);
+static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *arena);
 
 static bool leftmost_call_callback(
     walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
@@ -150,7 +151,11 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
     asdl_expr_seq *elts = _Py_asdl_expr_seq_new(count, arena);
     CHECK_NULL(elts);
     for (int i = 0; i < count; i++) {
-        expr_ty e = _PyAST_NamedExpr(placeholder_e, asdl_seq_GET(seq, i), EXTRAS(node), arena);
+        expr_ty e = asdl_seq_GET(seq, i);
+        if (!handle_injection(e, placeholder, arena)) {
+            return 0;
+        }
+        e = _PyAST_NamedExpr(placeholder_e, e, EXTRAS(node), arena);
         CHECK_NULL(e);
         asdl_seq_SET(elts, i, e);
     }

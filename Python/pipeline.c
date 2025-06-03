@@ -381,8 +381,6 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, PyAr
     expr_ty check_for_magic_method = _PyAST_Call(hasattr, args, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(check_for_magic_method);
 
-    expr_ty call_magic_method = _PyAST_Attribute(placeholder, magic_id, Load, EXTRAS(rhs), arena);
-    CHECK_NULL(call_magic_method);
     arg_ty a = _PyAST_arg(placeholder_id, NULL, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(a);
     asdl_arg_seq *lambda_args = _Py_asdl_arg_seq_new(1, arena);
@@ -395,7 +393,9 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, PyAr
     asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(1, arena);
     CHECK_NULL(magic_args);
     asdl_seq_SET(magic_args, 0, lambda);
-    call_magic_method = _PyAST_Call(call_magic_method, args, NULL, EXTRAS(rhs), arena);
+    expr_ty call_magic_method = _PyAST_Attribute(placeholder, magic_id, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(call_magic_method);
+    call_magic_method = _PyAST_Call(call_magic_method, magic_args, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
 
     rhs_orig->kind = IfExp_kind;

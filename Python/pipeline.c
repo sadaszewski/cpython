@@ -74,40 +74,6 @@ to:
 
 static _Py_Identifier PyID__ = { .string = "_", .index = -1 };
 
-#define CHECK_NULL(x) if ((x) == NULL) { return NULL; }
-
-#if 0
-static expr_ty wrap_in_lambda(expr_ty node, PyArena *arena) {
-    arguments_ty arguments = (arguments_ty) _PyArena_Malloc(arena, sizeof(*arguments));
-    CHECK_NULL(arguments);
-    memset(arguments, 0, sizeof(*arguments));
-    arguments[0].args = _Py_asdl_arg_seq_new(1, arena);
-    CHECK_NULL(arguments[0].args);
-
-    identifier placeholder = _PyUnicode_FromId(&PyID__);
-    CHECK_NULL(placeholder);
-    
-    arg_ty a = _PyAST_arg(placeholder, NULL, NULL, EXTRAS(node), arena);
-    CHECK_NULL(a);
-    asdl_seq_SET(arguments[0].args, 0, a);
-
-    expr_ty body = _PyAST_Name(placeholder, Load, EXTRAS(node), arena);
-    CHECK_NULL(body);
-
-    expr_ty lambda = _PyAST_Lambda(arguments, body, EXTRAS(node), arena);
-    CHECK_NULL(lambda);
-
-    asdl_expr_seq *args = _Py_asdl_expr_seq_new(1, arena);
-    CHECK_NULL(args);
-    asdl_seq_SET(args, 0, node);
-
-    expr_ty call = _PyAST_Call(lambda, args, NULL, EXTRAS(node), arena);
-
-    return call;
-}
-#endif
-
-#undef CHECK_NULL
 #define CHECK_NULL(x) if ((x) == NULL) return 0;
 
 static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena);
@@ -279,48 +245,6 @@ static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr
 
     return 1;
 }
-
-#if 0
-static int transform_pipeline_instance_old(expr_ty node, PyArena *arena) {
-    expr_ty lhs = node->v.Pipeline.left;
-    expr_ty rhs = node->v.Pipeline.right;
-
-    ast_walker_expr(lhs, Load, walk_replace_pipelines_callback, arena); // need to visit both sides manually
-    ast_walker_expr(rhs, Load, walk_replace_pipelines_callback, arena); // since we are running in early callback
-
-    expr_ty rhs_wrapped = wrap_in_lambda(rhs, arena);
-    CHECK_NULL(rhs_wrapped);
-
-    asdl_expr_seq *elts = _Py_asdl_expr_seq_new(2, arena);
-    CHECK_NULL(elts);
-    identifier placeholder_id = _PyUnicode_FromId(&PyID__);
-    CHECK_NULL(placeholder_id);
-    expr_ty placeholder = _PyAST_Name(placeholder_id, Store, EXTRAS(rhs), arena);
-    CHECK_NULL(placeholder);
-    expr_ty assignment = _PyAST_NamedExpr(placeholder, lhs, EXTRAS(rhs), arena);
-    CHECK_NULL(assignment);
-    asdl_seq_SET(elts, 0, assignment);
-    asdl_seq_SET(elts, 1, rhs_wrapped);
-    expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(rhs), arena);
-    CHECK_NULL(tuple);
-    expr_ty one = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ONE), NULL, EXTRAS(rhs), arena);
-    CHECK_NULL(one);
-
-    node->kind = Subscript_kind;
-    node->v.Subscript.value = tuple;
-    node->v.Subscript.slice = one;
-    node->v.Subscript.ctx = Load;
-
-    if (!handle_injection(rhs, placeholder_id, arena)) {
-        return 0;
-    }
-    if (!handle_magic_method(rhs, placeholder_id, arena)) {
-        return 0;
-    }
-
-    return 1;
-}
-#endif
 
 static bool find_placeholder_callback(
     walk_kind_ty kind,

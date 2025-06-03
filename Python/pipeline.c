@@ -203,6 +203,7 @@ static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *are
 
     if (
         !search_track.used
+        && !search_track.overwritten
         && rhs_leftmost_call != NULL
         /* && asdl_seq_LEN(rhs_leftmost_call->v.Call.args) == 0
         && asdl_seq_LEN(rhs_leftmost_call->v.Call.keywords) == 0 */

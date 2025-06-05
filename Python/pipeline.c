@@ -341,7 +341,9 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     memcpy(rhs, rhs_orig, sizeof(*rhs));
 
     expr_ty target = NULL;
+    expr_ty rhs_named_expr = NULL;
     if (rhs->kind == NamedExpr_kind) {
+        rhs_named_expr = rhs;
         target = rhs->v.NamedExpr.target;
         rhs = rhs->v.NamedExpr.value;
     }
@@ -399,6 +401,7 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     if (target != NULL) {
         call_magic_method = _PyAST_NamedExpr(target, call_magic_method, EXTRAS(rhs), arena);
         CHECK_NULL(call_magic_method);
+        rhs = rhs_named_expr;
     }
 
     rhs_orig->kind = IfExp_kind;

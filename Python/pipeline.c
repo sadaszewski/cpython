@@ -115,8 +115,8 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
     arguments_ty arguments = _PyAST_arguments(NULL, args, NULL, NULL, NULL, NULL, NULL, arena);
     CHECK_NULL(arguments);
 
-    expr_ty placeholder_e = _PyAST_Name(placeholder, Store, EXTRAS(node), arena);
-    CHECK_NULL(placeholder_e);
+    //expr_ty placeholder_e = _PyAST_Name(placeholder, Store, EXTRAS(node), arena);
+    //CHECK_NULL(placeholder_e);
     asdl_expr_seq *elts = _Py_asdl_expr_seq_new(count, arena);
     CHECK_NULL(elts);
     for (int i = 0; i < count; i++) {
@@ -124,8 +124,8 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
         if (!handle_magic_method(e, placeholder, (i == count - 1), arena)) {
             return 0;
         }
-        e = _PyAST_NamedExpr(placeholder_e, e, EXTRAS(node), arena);
-        CHECK_NULL(e);
+        //e = _PyAST_NamedExpr(placeholder_e, e, EXTRAS(node), arena);
+        //CHECK_NULL(e);
         asdl_seq_SET(elts, i, e);
     }
     expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(node), arena);
@@ -216,9 +216,9 @@ static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr
     CHECK_NULL(assignment);
     asdl_seq_SET(elts, 0, assignment);
     for (int i = 0; i < count; i++) {
-        assignment = _PyAST_NamedExpr(placeholder, asdl_seq_GET(seq, i), EXTRAS(node), arena);
-        CHECK_NULL(assignment);
-        asdl_seq_SET(elts, i + 1, assignment);
+        //assignment = _PyAST_NamedExpr(placeholder, asdl_seq_GET(seq, i), EXTRAS(node), arena);
+        //CHECK_NULL(assignment);
+        asdl_seq_SET(elts, i + 1, asdl_seq_GET(seq, i));
     }
     expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(node), arena);
     CHECK_NULL(tuple);
@@ -363,13 +363,13 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     
     expr_ty hasattr = _PyAST_Name(hasattr_id, Load, EXTRAS(rhs), arena);
     CHECK_NULL(hasattr);
-    expr_ty placeholder = _PyAST_Name(placeholder_id, Load, EXTRAS(rhs), arena);
-    CHECK_NULL(placeholder);
+    expr_ty placeholder_load = _PyAST_Name(placeholder_id, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(placeholder_load);
     expr_ty magic = _PyAST_Constant(magic_id, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(magic);
     asdl_expr_seq *args = _Py_asdl_expr_seq_new(2, arena);
     CHECK_NULL(args);
-    asdl_seq_SET(args, 0, placeholder);
+    asdl_seq_SET(args, 0, placeholder_load);
     asdl_seq_SET(args, 1, magic);
     expr_ty check_for_magic_method = _PyAST_Call(hasattr, args, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(check_for_magic_method);
@@ -394,19 +394,41 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     asdl_seq_SET(magic_args, 0, lambda);
     asdl_seq_SET(magic_args, 1, lambda_noinject);
     asdl_seq_SET(magic_args, 2, last_e);
-    expr_ty call_magic_method = _PyAST_Attribute(placeholder, magic_id, Load, EXTRAS(rhs), arena);
+    expr_ty call_magic_method = _PyAST_Attribute(placeholder_load, magic_id, Load, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
     call_magic_method = _PyAST_Call(call_magic_method, magic_args, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
+    expr_ty placeholder_store = _PyAST_Name(placeholder_id, Store, EXTRAS(rhs), arena);
+    CHECK_NULL(placeholder_store);
+    call_magic_method = _PyAST_NamedExpr(placeholder_store, call_magic_method, EXTRAS(rhs), arena);
+    // (_1 := (_ := magic())[1], (_ := _[0]))[1]
+    expr_ty one = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ONE), NULL, EXTRAS(rhs), arena);
+    CHECK_NULL(one);
+    expr_ty zero = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ZERO), NULL, EXTRAS(rhs), arena);
+    CHECK_NULL(zero);
+    expr_ty subscript = _PyAST_Subscript(call_magic_method, one, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(subscript);
     if (target != NULL) {
-        call_magic_method = _PyAST_NamedExpr(target, call_magic_method, EXTRAS(rhs), arena);
-        CHECK_NULL(call_magic_method);
+        subscript = _PyAST_NamedExpr(target, subscript, EXTRAS(rhs), arena);
+        CHECK_NULL(subscript);
         rhs = rhs_named_expr;
     }
+    expr_ty subscript2 = _PyAST_Subscript(placeholder_load, last ? one : zero, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(subscript2);
+    subscript2 = _PyAST_NamedExpr(placeholder_store, subscript2, EXTRAS(rhs), arena);
+    CHECK_NULL(subscript2);
+    asdl_expr_seq *elts = _Py_asdl_expr_seq_new(2, arena);
+    CHECK_NULL(elts);
+    asdl_seq_SET(elts, 0, subscript);
+    asdl_seq_SET(elts, 1, subscript2);
+    expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(tuple);
+    tuple = _PyAST_Subscript(tuple, one, Load, EXTRAS(rhs), arena);
+    CHECK_NULL(tuple);
 
     rhs_orig->kind = IfExp_kind;
     rhs_orig->v.IfExp.test = check_for_magic_method;
-    rhs_orig->v.IfExp.body = call_magic_method;
+    rhs_orig->v.IfExp.body = tuple;
     rhs_orig->v.IfExp.orelse = rhs;
 
     return 1;

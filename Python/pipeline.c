@@ -340,9 +340,15 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     CHECK_NULL(rhs);
     memcpy(rhs, rhs_orig, sizeof(*rhs));
 
+    expr_ty target = NULL;
+    if (rhs->kind == NamedExpr_kind) {
+        target = rhs->v.NamedExpr.target;
+        rhs = rhs->v.NamedExpr.value;
+    }
+
     expr_ty rhs_noinject = (expr_ty) _PyArena_Malloc(arena, sizeof(*rhs));
     CHECK_NULL(rhs_noinject);
-    memcpy(rhs_noinject, rhs_orig, sizeof(*rhs));
+    memcpy(rhs_noinject, rhs, sizeof(*rhs));
 
     if (!handle_injection(rhs, placeholder_id, arena)) {
         return 0;
@@ -390,6 +396,10 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     CHECK_NULL(call_magic_method);
     call_magic_method = _PyAST_Call(call_magic_method, magic_args, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
+    if (target != NULL) {
+        call_magic_method = _PyAST_NamedExpr(target, call_magic_method, EXTRAS(rhs), arena);
+        CHECK_NULL(call_magic_method);
+    }
 
     rhs_orig->kind = IfExp_kind;
     rhs_orig->v.IfExp.test = check_for_magic_method;

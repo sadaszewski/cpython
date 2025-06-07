@@ -2158,6 +2158,10 @@ symtable_visit_expr(struct symtable *st, expr_ty e)
         }
         VISIT(st, expr, e->v.Pipeline.right);
         break;
+    case Intrinsic2_kind:
+        VISIT(st, expr, e->v.Intrinsic2.arg1);
+        VISIT(st, expr, e->v.Intrinsic2.arg2);
+        break;
     case UnaryOp_kind:
         VISIT(st, expr, e->v.UnaryOp.operand);
         break;

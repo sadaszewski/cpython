@@ -241,6 +241,12 @@ bool ast_walker_expr(expr_ty node, EXTRAS) {
                 ast_walker_expr(node->v.Pipeline.right, EXTRA_3)
             );
             break;
+        case Intrinsic2_kind:
+            res = (
+                ast_walker_expr(node->v.Intrinsic2.arg1, EXTRA_3) &&
+                ast_walker_expr(node->v.Intrinsic2.arg2, EXTRA_3)
+            );
+            break;
     }
 
     if (!res) {

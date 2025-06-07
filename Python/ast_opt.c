@@ -728,6 +728,10 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTOptimizeState *state)
         }
         CALL(astfold_expr, expr_ty, node_->v.Pipeline.right);
         break;
+    case Intrinsic2_kind:
+        CALL(astfold_expr, expr_ty, node_->v.Intrinsic2.arg1);
+        CALL(astfold_expr, expr_ty, node_->v.Intrinsic2.arg2);
+        break;
     case UnaryOp_kind:
         CALL(astfold_expr, expr_ty, node_->v.UnaryOp.operand);
         CALL(fold_unaryop, expr_ty, node_);

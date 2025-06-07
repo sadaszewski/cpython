@@ -917,6 +917,9 @@ append_ast_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
         return append_named_expr(writer, e, level);
     case Pipeline_kind:
         return append_ast_pipeline(writer, e);
+    case Intrinsic2_kind:
+        PyErr_SetString(PyExc_SystemError, "Unparsing post-processed AST should not be done - cannot unparse Intrinsic2");
+        return -1;
     // No default so compiler emits a warning for unhandled cases
     }
     PyErr_SetString(PyExc_SystemError,

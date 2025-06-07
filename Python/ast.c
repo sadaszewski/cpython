@@ -280,6 +280,10 @@ validate_expr(struct validator *state, expr_ty exp, expr_context_ty ctx)
         }
         ret &= validate_expr(state, exp->v.Pipeline.right, Load);
         break;
+    case Intrinsic2_kind:
+        ret = validate_expr(state, exp->v.Intrinsic2.arg1, Load) &&
+            validate_expr(state, exp->v.Intrinsic2.arg2, Load);
+        break;
     case UnaryOp_kind:
         ret = validate_expr(state, exp->v.UnaryOp.operand, Load);
         break;

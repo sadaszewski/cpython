@@ -5,6 +5,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_walker.h"
+#include "pycore_intrinsics.h"
 
 #define EXTRAS(x) (x)->lineno, (x)->col_offset, (x)->end_lineno, (x)->end_col_offset
 
@@ -361,19 +362,13 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     identifier magic_id = _PyUnicode_FromId(&PyID___pipe__);
     CHECK_NULL(magic_id);
     
-    expr_ty hasattr = _PyAST_Name(hasattr_id, Load, EXTRAS(rhs), arena);
-    CHECK_NULL(hasattr);
     expr_ty placeholder_load = _PyAST_Name(placeholder_id, Load, EXTRAS(rhs), arena);
     CHECK_NULL(placeholder_load);
     expr_ty magic = _PyAST_Constant(magic_id, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(magic);
-    asdl_expr_seq *args = _Py_asdl_expr_seq_new(2, arena);
-    CHECK_NULL(args);
-    asdl_seq_SET(args, 0, placeholder_load);
-    asdl_seq_SET(args, 1, magic);
-    expr_ty check_for_magic_method = _PyAST_Call(hasattr, args, NULL, EXTRAS(rhs), arena);
+    expr_ty check_for_magic_method = _PyAST_Intrinsic2(INTRINSIC_HASATTR, placeholder_load, magic, EXTRAS(rhs), arena);
     CHECK_NULL(check_for_magic_method);
-
+    
     arg_ty a = _PyAST_arg(placeholder_id, NULL, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(a);
     asdl_arg_seq *lambda_args = _Py_asdl_arg_seq_new(1, arena);

@@ -6224,6 +6224,11 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
     case Pipeline_kind:
         PyErr_Format(PyExc_SystemError, "Pipeline expr should have been transformed into a call.");
         return ERROR;
+    case Intrinsic2_kind:
+        VISIT(c, expr, e->v.Intrinsic2.arg1);
+        VISIT(c, expr, e->v.Intrinsic2.arg2);
+        ADDOP_I(c, loc, CALL_INTRINSIC_2, e->v.Intrinsic2.index);
+        break;
     case UnaryOp_kind:
         VISIT(c, expr, e->v.UnaryOp.operand);
         if (e->v.UnaryOp.op == UAdd) {

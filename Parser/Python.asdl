@@ -93,6 +93,7 @@ module Python
          | Slice(expr? lower, expr? upper, expr? step)
 
          | Pipeline(expr? left, expr right)
+         | Intrinsic2(int index, expr arg1, expr arg2)
 
           -- col_offset is the byte offset in the utf8 string the parser uses
           attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)

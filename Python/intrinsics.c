@@ -255,6 +255,25 @@ make_typevar_with_constraints(PyThreadState* Py_UNUSED(ignored), PyObject *name,
     return _Py_make_typevar(name, NULL, evaluate_constraints);
 }
 
+static PyObject *
+intrinsic_hasattr(PyThreadState *tstate, PyObject *object,
+                              PyObject *attribute_name)
+{
+    assert(object != NULL);
+    assert(attribute_name != NULL);
+    assert(PyUnicode_Check(attribute_name));
+    PyObject *v = NULL;
+    if (PyObject_GetOptionalAttr(object, attribute_name, &v) < 0) {
+        _PyErr_SetString(tstate, PyExc_SystemError, "invalid intrinsic function");
+        return NULL;
+    }
+    if (v == NULL) {
+        Py_RETURN_FALSE;
+    }
+    Py_DECREF(v);
+    Py_RETURN_TRUE;
+}
+
 const intrinsic_func2_info
 _PyIntrinsics_BinaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_2_INVALID, no_intrinsic2)
@@ -263,6 +282,7 @@ _PyIntrinsics_BinaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, make_typevar_with_constraints)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_SET_FUNCTION_TYPE_PARAMS, _Py_set_function_type_params)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_SET_TYPEPARAM_DEFAULT, _Py_set_typeparam_default)
+    INTRINSIC_FUNC_ENTRY(INTRINSIC_HASATTR, intrinsic_hasattr)
 };
 
 #undef INTRINSIC_FUNC_ENTRY

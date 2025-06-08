@@ -358,6 +358,14 @@ static _Py_Identifier PyID_hasattr = { .string = "hasattr", .index = -1 };
 static _Py_Identifier PyID___pipe__ = { .string = "__pipe__", .index = -1 };
 
 static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool last, PyArena *arena) {
+    PyObject *unparsed_o = _PyAST_ExprAsUnicode(rhs_orig);
+    CHECK_NULL(unparsed_o);
+    if (_PyArena_AddPyObject(arena, unparsed_o) < 0) {
+        Py_DecRef(unparsed_o);
+        return 0;
+    }
+    expr_ty unparsed_e = _PyAST_Constant(unparsed_o, NULL, EXTRAS(rhs_orig), arena);
+    CHECK_NULL(unparsed_e);
 
     expr_ty rhs = (expr_ty) _PyArena_Malloc(arena, sizeof(*rhs));
     CHECK_NULL(rhs);
@@ -414,14 +422,6 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
         target_name = _PyAST_Constant(target->v.Name.id, NULL, EXTRAS(rhs), arena);
         CHECK_NULL(target_name);
     }
-    PyObject *unparsed_o = _PyAST_ExprAsUnicode(rhs_orig);
-    CHECK_NULL(unparsed_o);
-    if (_PyArena_AddPyObject(arena, unparsed_o) < 0) {
-        Py_DecRef(unparsed_o);
-        return 0;
-    }
-    expr_ty unparsed_e = _PyAST_Constant(unparsed_o, NULL, EXTRAS(rhs), arena);
-    CHECK_NULL(unparsed_e);
     asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(5, arena);
     CHECK_NULL(magic_args);
     asdl_seq_SET(magic_args, 0, lambda);

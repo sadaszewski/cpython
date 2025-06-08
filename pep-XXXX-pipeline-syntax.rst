@@ -417,12 +417,52 @@ Result of stage #4: <map object at 0x10ca888>
 Result of stage #5: 2, 3, 4, 5, 6
 '2, 3, 4, 5, 6'
 
-Use case 4
+Use case 4 - code builder
+-------------------------
+
+Using the unparsed expressions passed to ``__pipe__()`` one can construct a convenient code builder
+without the need to keep the source code in strings.
+
+.. code-block:: python
+
+    class CodeBuilder:
+        def __init__(self):
+            self.code = []
+        def __pipe__(self, rhs, rhs_noinject, last, name, unparsed):
+            self.code.append(unparsed)
+            return (self, None)
+        def result(self):
+            return "\n".join(self.code)
+        def execute(self):
+            expr = "(" + ", ".join(self.code) + ")"
+            print(f"{expr=}")
+            res = eval(expr)
+            return res[-1]
+
+    cb = CodeBuilder()
+    (cb
+        |> (a := [1, 2, 3])
+        |> (b := [4, 5, 6])
+        |> [x + y for x, y in zip(a, b)])
+
+>>> print(cb.result())
+(a := [1, 2, 3])
+(b := [4, 5, 6])
+[x + y for x, y in zip(a, b)]
+
+>>> print(cb.execute())
+expr='((a := [1, 2, 3]), (b := [4, 5, 6]), [x + y for x, y in zip(a, b)])'
+[5, 7, 9]
+
+This is just a dummy demonstration but in more advanced scenarios one could envisage for example
+saving the unparsed source code to files or reparsing the expressions and performing AST modifications.
+
+Use case 5
 ----------
 
 Lorem ipsum dolor sit amet
 
-Use case 5
+Use case 6
 ----------
 
 Lorem ipsum dolor sit amet

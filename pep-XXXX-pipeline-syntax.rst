@@ -283,6 +283,10 @@ and an alternative using the pipeline expression:
 
             return x
 
+The syntax is less dense and features a natural left-to-right flow of processing.
+The pipeline is composable. Repetitive elements like ``|> self.relu() |> self.pool()``
+can be captured in a helper variable and re-used in multiple pipelines.
+
 Use case 3
 ----------
 

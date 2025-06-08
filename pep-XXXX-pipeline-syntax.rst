@@ -170,8 +170,8 @@ With regular operator overloading the long- and short-form would have to look li
 
 and any optional assignments of the intermediate values using the ``:=`` operator would not work as desired.
 
-Use case 2 - clean syntax for layers in Deep Learning
------------------------------------------------------
+Use case 2 - cleaner syntax for layers in Deep Learning
+-------------------------------------------------------
 
 Artificial neural networks feature many levels of organization. Finding a good balance between
 encapsulation and inlining is not always trivial. The pipeline expression would allow to more
@@ -287,7 +287,115 @@ The syntax is less dense and features a natural left-to-right flow of processing
 The pipeline is composable. Repetitive elements like ``|> self.relu() |> self.pool()``
 can be captured in a helper variable and re-used in multiple pipelines.
 
-Use case 3
+Use case 3 - expression debugging
+---------------------------------
+
+Clear left-to-right ordering can provide more visually compelling error indication
+compared to nested expressions.
+
+Given:
+
+.. code-block:: python
+
+    def f(x):
+        raise ValueError
+
+    def g(x):
+        return x + 1
+
+    def h(x):
+        return x * 2
+
+
+.. raw:: html
+
+    <style>
+        .red { color: red; font-family: monospace; }
+        .fixed { font-family: monospace; }
+        .purple { color: purple; }
+    </style>
+
+.. role:: red
+
+.. role:: fixed
+
+| :fixed:`>>> f(g(h(8)))`
+| :fixed:`Traceback (most recent call last):`
+| :fixed:`File "test_pipeline.py", line 14, in <module>`
+|    :red:`f(g(h(8)))`
+|    :red:`~^^^^^^^^^`
+| :fixed:`File "test_pipeline.py", line 5, in f`
+|    :fixed:`raise ValueError`
+| :fixed:`ValueError`
+
+compared to:
+
+>>> 8 |> h() |> g() |> f()
+
+
+.. raw:: html
+
+    <pre>
+        Traceback (most recent call last):
+        File "test_pipeline.py", line 13, in <module>
+            8 |> h() |> g() |> <span class="red">f()</span>
+                               <span class="red">~^^</span>
+        File "test_pipeline.py", line 5, in f
+            raise ValueError
+        ValueError
+    </pre>
+
+The latter is more readable out of the box and the error is more readily identifiable.
+With an override of ``__pipe__()`` the following can be achieved:
+
+.. code-block:: python
+
+    class DebugPipeline:
+        def __init__(self, value, counter = 0):
+            self.value = value
+            self.counter = 0
+        def __pipe__(self, rhs, rhs_noinject, last, name):
+            try:
+                v = rhs(self.value)
+                print(f"Result of {name}: {v}")
+                return (DebugPipeline(v, self.counter + 1))
+            except Exception as e:
+                raise Exception(f"Exception while executing stage #{self.counter + 1} ({name}) of the pipeline") from e
+
+>>> DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := f())
+
+.. raw:: html
+
+    <pre>
+        Result of _1: 16
+        Result of _2: 17
+        Traceback (most recent call last):
+        File "test_pipeline.py", line 9, in __pipe__
+            v = rhs(self.value)
+        File "test_pipeline.py", line 26, in <lambda>
+            DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := <span class="red">f()</span>)
+                                                                     <span class="red">~^^</span>
+        File "test_pipeline.py", line 18, in f
+            raise ValueError
+        <span class="purple">ValueError</span>
+
+        The above exception was the direct cause of the following exception:
+
+        Traceback (most recent call last):
+        File "test_pipeline.py", line 26, in <module>
+            DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := <span class="red">f()</span>)
+                                                                     <span class="red">~^^</span>
+        File "test_pipeline.py", line 14, in __pipe__
+            raise Exception(msg) from e
+        <span class="purple">Exception: Exception while executing stage #3 (_3) of the pipeline</span>
+    </pre>
+
+Use case 4
+----------
+
+Lorem ipsum dolor sit amet
+
+Use case 5
 ----------
 
 Lorem ipsum dolor sit amet

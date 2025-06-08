@@ -421,7 +421,7 @@ Use case 4 - code builder
 -------------------------
 
 Using the unparsed expressions passed to ``__pipe__()`` one can construct a convenient code builder
-without the need to keep the source code in strings.
+without the need to provide the source code in strings.
 
 .. code-block:: python
 

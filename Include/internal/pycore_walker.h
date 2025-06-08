@@ -29,11 +29,11 @@ typedef enum _callback_kind {
 
 typedef bool (*AST_WALKER_CALLBACK)(walk_kind_ty, walk_node_ty, expr_context_ty, void *userdata, callback_kind_ty, void **target);
 
-bool ast_walker_arguments(arguments_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);
-bool ast_walker_expr(expr_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);
-bool ast_walker_stmt(stmt_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);
-bool ast_walker_mod(mod_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);
-bool ast_walker(walk_kind_ty, walk_node_ty, expr_context_ty, AST_WALKER_CALLBACK, void*);
+bool ast_walker_arguments(arguments_ty, void**, expr_context_ty, AST_WALKER_CALLBACK, void*);
+bool ast_walker_expr(expr_ty, void**, expr_context_ty, AST_WALKER_CALLBACK, void*);
+bool ast_walker_stmt(stmt_ty, void**, expr_context_ty, AST_WALKER_CALLBACK, void*);
+bool ast_walker_mod(mod_ty, void**, expr_context_ty, AST_WALKER_CALLBACK, void*);
+bool ast_walker(walk_kind_ty, walk_node_ty, void**, expr_context_ty, AST_WALKER_CALLBACK, void*);
 
 #ifdef __cplusplus
 }

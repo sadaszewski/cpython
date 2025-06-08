@@ -11,10 +11,13 @@
 #define EXTRA_3 ctx, callback, userdata
 #define EXTRA_2 callback, userdata
 
-#define TARGET(x) (x), &(x)
+#define TARGET(x) (x), ((void**) &(x))
 #define NO_TARGET(x) (x)
 
 #define CHECK_NULL(x) if ((x) == NULL) { return true; }
+
+#undef asdl_seq_GET
+#define asdl_seq_GET(S, I) ((S)->typed_elements[(I)])
 
 bool ast_walker_expr(expr_ty node, EXTRAS);
 
@@ -66,16 +69,15 @@ bool ast_walker_arguments(arguments_ty args, EXTRAS) {
 static bool ast_walker_compr(comprehension_ty compr, EXTRAS) {
     CHECK_NULL(compr);
     return (
-        ast_walker_expr(compr->target, EXTRA_3) &&
-        ast_walker_expr(compr->iter, EXTRA_3) &&
-        ast_walker_expr_seq(compr->ifs, EXTRA_3)
+        ast_walker_expr(TARGET(compr->target), EXTRA_3) &&
+        ast_walker_expr(TARGET(compr->iter), EXTRA_3) &&
+        ast_walker_expr_seq(TARGET(compr->ifs), EXTRA_3)
     );
 }
 
 static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        comprehension_ty item = asdl_seq_GET(seq, i);
-        if (!ast_walker_compr(item, EXTRA_3)) {
+        if (!ast_walker_compr(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -85,14 +87,14 @@ static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
 static bool ast_walker_keyword(keyword_ty kw, EXTRAS) {
     CHECK_NULL(kw);
     return (
-        ast_walker_identifier(kw->arg, EXTRA_3) &&
-        ast_walker_expr(kw->value, EXTRA_3)
+        ast_walker_identifier(TARGET(kw->arg), EXTRA_3) &&
+        ast_walker_expr(TARGET(kw->value), EXTRA_3)
     );
 }
 
 static bool ast_walker_keyword_seq(asdl_keyword_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_keyword(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_keyword(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -103,151 +105,151 @@ bool ast_walker_expr(expr_ty node, EXTRAS) {
     CHECK_NULL(node);
 
     walk_node_ty walk_node = { .Expr = node };
-    if (!callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackEarly_kind)) {
+    if (!callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
 
     bool res = true;
     switch (node->kind) {
         case BoolOp_kind:
-            res = ast_walker_expr_seq(node->v.BoolOp.values, EXTRA_3);
+            res = ast_walker_expr_seq(TARGET(node->v.BoolOp.values), EXTRA_3);
             break;
         case NamedExpr_kind:
             res = (
-                ast_walker_expr(node->v.NamedExpr.target, Store, EXTRA_2) &&
-                ast_walker_expr(node->v.NamedExpr.value, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.NamedExpr.target), Store, EXTRA_2) &&
+                ast_walker_expr(TARGET(node->v.NamedExpr.value), EXTRA_3)
             );
             break;
         case BinOp_kind:
             res = (
-                ast_walker_expr(node->v.BinOp.left, EXTRA_3) &&
-                ast_walker_expr(node->v.BinOp.right, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.BinOp.left), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.BinOp.right), EXTRA_3)
             );
             break;
         case UnaryOp_kind:
-            res = ast_walker_expr(node->v.UnaryOp.operand, EXTRA_3);
+            res = ast_walker_expr(TARGET(node->v.UnaryOp.operand), EXTRA_3);
             break;
         case Lambda_kind:
             res = (
-                ast_walker_arguments(node->v.Lambda.args, EXTRA_3) &&
-                ast_walker_expr(node->v.Lambda.body, EXTRA_3)
+                ast_walker_arguments(TARGET(node->v.Lambda.args), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.Lambda.body), EXTRA_3)
             );
             break;
         case IfExp_kind:
             res = (
-                ast_walker_expr(node->v.IfExp.test, EXTRA_3) &&
-                ast_walker_expr(node->v.IfExp.body, EXTRA_3) &&
-                ast_walker_expr(node->v.IfExp.orelse, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.IfExp.test), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.IfExp.body), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.IfExp.orelse), EXTRA_3)
             );
             break;
         case Dict_kind:
             res = (
-                ast_walker_expr_seq(node->v.Dict.keys, EXTRA_3) &&
-                ast_walker_expr_seq(node->v.Dict.values, EXTRA_3)
+                ast_walker_expr_seq(TARGET(node->v.Dict.keys), EXTRA_3) &&
+                ast_walker_expr_seq(TARGET(node->v.Dict.values), EXTRA_3)
             );
             break;
         case Set_kind:
-            res = ast_walker_expr_seq(node->v.Set.elts, EXTRA_3);
+            res = ast_walker_expr_seq(TARGET(node->v.Set.elts), EXTRA_3);
             break;
         case ListComp_kind:
             res = (
-                ast_walker_expr(node->v.ListComp.elt, EXTRA_3) &&
-                ast_walker_compr_seq(node->v.ListComp.generators, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.ListComp.elt), EXTRA_3) &&
+                ast_walker_compr_seq(TARGET(node->v.ListComp.generators), EXTRA_3)
             );
             break;
         case SetComp_kind:
             res =(
-                ast_walker_expr(node->v.SetComp.elt, EXTRA_3) &&
-                ast_walker_compr_seq(node->v.SetComp.generators, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.SetComp.elt), EXTRA_3) &&
+                ast_walker_compr_seq(TARGET(node->v.SetComp.generators), EXTRA_3)
             );
             break;
         case DictComp_kind:
             res = (
-                ast_walker_expr(node->v.DictComp.key, EXTRA_3) &&
-                ast_walker_expr(node->v.DictComp.value, EXTRA_3) &&
-                ast_walker_compr_seq(node->v.DictComp.generators, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.DictComp.key), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.DictComp.value), EXTRA_3) &&
+                ast_walker_compr_seq(TARGET(node->v.DictComp.generators), EXTRA_3)
             );
             break;
         case GeneratorExp_kind:
             res = (
-                ast_walker_expr(node->v.GeneratorExp.elt, EXTRA_3) &&
-                ast_walker_compr_seq(node->v.GeneratorExp.generators, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.GeneratorExp.elt), EXTRA_3) &&
+                ast_walker_compr_seq(TARGET(node->v.GeneratorExp.generators), EXTRA_3)
             );
             break;
         case Await_kind:
-            res = ast_walker_expr(node->v.Await.value, EXTRA_3);
+            res = ast_walker_expr(TARGET(node->v.Await.value), EXTRA_3);
             break;
         case Yield_kind:
-            res = ast_walker_expr(node->v.Yield.value, EXTRA_3);
+            res = ast_walker_expr(TARGET(node->v.Yield.value), EXTRA_3);
             break;
         case YieldFrom_kind:
-            res = ast_walker_expr(node->v.YieldFrom.value, EXTRA_3);
+            res = ast_walker_expr(TARGET(node->v.YieldFrom.value), EXTRA_3);
             break;
         case Compare_kind:
             res = (
-                ast_walker_expr(node->v.Compare.left, EXTRA_3) &&
-                ast_walker_expr_seq(node->v.Compare.comparators, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.Compare.left), EXTRA_3) &&
+                ast_walker_expr_seq(TARGET(node->v.Compare.comparators), EXTRA_3)
             );
             break;
         case Call_kind:
             res = (
-                ast_walker_expr(node->v.Call.func, EXTRA_3) &&
-                ast_walker_expr_seq(node->v.Call.args, EXTRA_3) &&
-                ast_walker_keyword_seq(node->v.Call.keywords, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.Call.func), EXTRA_3) &&
+                ast_walker_expr_seq(TARGET(node->v.Call.args), EXTRA_3) &&
+                ast_walker_keyword_seq(TARGET(node->v.Call.keywords), EXTRA_3)
             );
             break;
         case FormattedValue_kind:
             res =(
-                ast_walker_expr(node->v.FormattedValue.format_spec, EXTRA_3) &&
-                ast_walker_expr(node->v.FormattedValue.value, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.FormattedValue.format_spec), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.FormattedValue.value), EXTRA_3)
             );
             break;
         case JoinedStr_kind:
-            res = ast_walker_expr_seq(node->v.JoinedStr.values, EXTRA_3);
+            res = ast_walker_expr_seq(TARGET(node->v.JoinedStr.values), EXTRA_3);
             break;
         case Constant_kind:
             break;
         case Attribute_kind:
             res = (
-                ast_walker_expr(node->v.Attribute.value, node->v.Attribute.ctx, EXTRA_2) &&
-                ast_walker_identifier(node->v.Attribute.attr, node->v.Attribute.ctx, EXTRA_2)
+                ast_walker_expr(TARGET(node->v.Attribute.value), node->v.Attribute.ctx, EXTRA_2) &&
+                ast_walker_identifier(TARGET(node->v.Attribute.attr), node->v.Attribute.ctx, EXTRA_2)
             );
             break;
         case Subscript_kind:
             res = (
-                ast_walker_expr(node->v.Subscript.value, node->v.Subscript.ctx, EXTRA_2) &&
-                ast_walker_expr(node->v.Subscript.slice, node->v.Subscript.ctx, EXTRA_2)
+                ast_walker_expr(TARGET(node->v.Subscript.value), node->v.Subscript.ctx, EXTRA_2) &&
+                ast_walker_expr(TARGET(node->v.Subscript.slice), node->v.Subscript.ctx, EXTRA_2)
             );
             break;
         case Starred_kind:
-            res = ast_walker_expr(node->v.Starred.value, node->v.Starred.ctx, EXTRA_2);
+            res = ast_walker_expr(TARGET(node->v.Starred.value), node->v.Starred.ctx, EXTRA_2);
             break;
         case Name_kind:
-            res = ast_walker_identifier(node->v.Name.id, node->v.Name.ctx, EXTRA_2);
+            res = ast_walker_identifier(TARGET(node->v.Name.id), node->v.Name.ctx, EXTRA_2);
             break;
         case List_kind:
-            res = ast_walker_expr_seq(node->v.List.elts, node->v.List.ctx, EXTRA_2);
+            res = ast_walker_expr_seq(TARGET(node->v.List.elts), node->v.List.ctx, EXTRA_2);
             break;
         case Tuple_kind:
-            res = ast_walker_expr_seq(node->v.Tuple.elts, node->v.Tuple.ctx, EXTRA_2);
+            res = ast_walker_expr_seq(TARGET(node->v.Tuple.elts), node->v.Tuple.ctx, EXTRA_2);
             break;
         case Slice_kind:
             res = (
-                ast_walker_expr(node->v.Slice.lower, EXTRA_3) &&
-                ast_walker_expr(node->v.Slice.step, EXTRA_3) &&
-                ast_walker_expr(node->v.Slice.upper, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.Slice.lower), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.Slice.step), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.Slice.upper), EXTRA_3)
             );
             break;
         case Pipeline_kind:
             res = (
-                ast_walker_expr(node->v.Pipeline.left, EXTRA_3) &&
-                ast_walker_expr(node->v.Pipeline.right, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.Pipeline.left), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.Pipeline.right), EXTRA_3)
             );
             break;
         case Intrinsic2_kind:
             res = (
-                ast_walker_expr(node->v.Intrinsic2.arg1, EXTRA_3) &&
-                ast_walker_expr(node->v.Intrinsic2.arg2, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.Intrinsic2.arg1), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.Intrinsic2.arg2), EXTRA_3)
             );
             break;
     }
@@ -256,14 +258,14 @@ bool ast_walker_expr(expr_ty node, EXTRAS) {
         return false;
     }
 
-    return callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackLate_kind);
+    return callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackLate_kind, target);
 }
 
 bool ast_walker_stmt(stmt_ty node, EXTRAS);
 
 static bool ast_walker_stmt_seq(asdl_stmt_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_stmt(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_stmt(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -275,19 +277,19 @@ static bool ast_walker_type_param(type_param_ty node, EXTRAS) {
     switch(node->kind) {
         case TypeVar_kind:
             return (
-                ast_walker_identifier(node->v.TypeVar.name, EXTRA_3) &&
-                ast_walker_expr(node->v.TypeVar.bound, EXTRA_3) &&
-                ast_walker_expr(node->v.TypeVar.default_value, EXTRA_3)
+                ast_walker_identifier(TARGET(node->v.TypeVar.name), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.TypeVar.bound), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.TypeVar.default_value), EXTRA_3)
             );
         case ParamSpec_kind:
             return (
-                ast_walker_identifier(node->v.ParamSpec.name, EXTRA_3) &&
-                ast_walker_expr(node->v.ParamSpec.default_value, EXTRA_3)
+                ast_walker_identifier(TARGET(node->v.ParamSpec.name), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.ParamSpec.default_value), EXTRA_3)
             );
         case TypeVarTuple_kind:
             return (
-                ast_walker_identifier(node->v.TypeVarTuple.name, EXTRA_3) &&
-                ast_walker_expr(node->v.TypeVarTuple.default_value, EXTRA_3)
+                ast_walker_identifier(TARGET(node->v.TypeVarTuple.name), EXTRA_3) &&
+                ast_walker_expr(TARGET(node->v.TypeVarTuple.default_value), EXTRA_3)
             );
     }
     return true;
@@ -295,7 +297,7 @@ static bool ast_walker_type_param(type_param_ty node, EXTRAS) {
 
 static bool ast_walker_type_param_seq(asdl_type_param_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_type_param(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_type_param(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -305,14 +307,14 @@ static bool ast_walker_type_param_seq(asdl_type_param_seq *seq, EXTRAS) {
 static bool ast_walker_withitem(withitem_ty node, EXTRAS) {
     CHECK_NULL(node);
     return (
-        ast_walker_expr(node->context_expr, EXTRA_3) &&
-        ast_walker_expr(node->optional_vars, EXTRA_3)
+        ast_walker_expr(TARGET(node->context_expr), EXTRA_3) &&
+        ast_walker_expr(TARGET(node->optional_vars), EXTRA_3)
     );
 }
 
 static bool ast_walker_withitem_seq(asdl_withitem_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_withitem(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_withitem(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -323,7 +325,7 @@ static bool ast_walker_pattern(pattern_ty node, EXTRAS);
 
 static bool ast_walker_pattern_seq(asdl_pattern_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_pattern(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_pattern(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -332,7 +334,7 @@ static bool ast_walker_pattern_seq(asdl_pattern_seq *seq, EXTRAS) {
 
 static bool ast_walker_identifier_seq(asdl_identifier_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_identifier(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_identifier(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -344,39 +346,39 @@ static bool ast_walker_pattern(pattern_ty node, EXTRAS) {
     switch(node->kind) {
         case MatchValue_kind:
             return (
-                ast_walker_expr(node->v.MatchValue.value, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.MatchValue.value), EXTRA_3)
             );
         case MatchSingleton_kind:
             return true;
         case MatchSequence_kind:
             return (
-                ast_walker_pattern_seq(node->v.MatchSequence.patterns, EXTRA_3)
+                ast_walker_pattern_seq(TARGET(node->v.MatchSequence.patterns), EXTRA_3)
             );
         case MatchMapping_kind:
             return (
-                ast_walker_expr_seq(node->v.MatchMapping.keys, EXTRA_3) &&
-                ast_walker_pattern_seq(node->v.MatchMapping.patterns, EXTRA_3) &&
-                ast_walker_identifier(node->v.MatchMapping.rest, EXTRA_3)
+                ast_walker_expr_seq(TARGET(node->v.MatchMapping.keys), EXTRA_3) &&
+                ast_walker_pattern_seq(TARGET(node->v.MatchMapping.patterns), EXTRA_3) &&
+                ast_walker_identifier(TARGET(node->v.MatchMapping.rest), EXTRA_3)
             );
         case MatchClass_kind:
             return (
-                ast_walker_expr(node->v.MatchClass.cls, EXTRA_3) &&
-                ast_walker_pattern_seq(node->v.MatchClass.patterns, EXTRA_3) &&
-                ast_walker_identifier_seq(node->v.MatchClass.kwd_attrs, EXTRA_3) &&
-                ast_walker_pattern_seq(node->v.MatchClass.kwd_patterns, EXTRA_3)
+                ast_walker_expr(TARGET(node->v.MatchClass.cls), EXTRA_3) &&
+                ast_walker_pattern_seq(TARGET(node->v.MatchClass.patterns), EXTRA_3) &&
+                ast_walker_identifier_seq(TARGET(node->v.MatchClass.kwd_attrs), EXTRA_3) &&
+                ast_walker_pattern_seq(TARGET(node->v.MatchClass.kwd_patterns), EXTRA_3)
             );
         case MatchStar_kind:
             return (
-                ast_walker_identifier(node->v.MatchStar.name, EXTRA_3)
+                ast_walker_identifier(TARGET(node->v.MatchStar.name), EXTRA_3)
             );
         case MatchAs_kind:
             return (
-                ast_walker_pattern(node->v.MatchAs.pattern, EXTRA_3) &&
-                ast_walker_identifier(node->v.MatchAs.name, EXTRA_3)
+                ast_walker_pattern(TARGET(node->v.MatchAs.pattern), EXTRA_3) &&
+                ast_walker_identifier(TARGET(node->v.MatchAs.name), EXTRA_3)
             );
         case MatchOr_kind:
             return (
-                ast_walker_pattern_seq(node->v.MatchOr.patterns, EXTRA_3)
+                ast_walker_pattern_seq(TARGET(node->v.MatchOr.patterns), EXTRA_3)
             );
     }
     return true;

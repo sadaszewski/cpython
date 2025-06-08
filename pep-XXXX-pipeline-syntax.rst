@@ -315,23 +315,23 @@ Given:
         .purple { color: purple; }
     </style>
 
-.. role:: red
+>>> f(g(h(8)))
 
-.. role:: fixed
+.. raw:: html
 
-| :fixed:`>>> f(g(h(8)))`
-| :fixed:`Traceback (most recent call last):`
-| :fixed:`File "test_pipeline.py", line 14, in <module>`
-|    :red:`f(g(h(8)))`
-|    :red:`~^^^^^^^^^`
-| :fixed:`File "test_pipeline.py", line 5, in f`
-|    :fixed:`raise ValueError`
-| :fixed:`ValueError`
+    <pre>
+        Traceback (most recent call last):
+        File "test_pipeline.py", line 14, in <module>
+            <span class="red">f(g(h(8)))</span>
+            <span class="red">~^^^^^^^^^</span>
+        File "test_pipeline.py", line 5, in f
+            raise ValueError
+        <span class="purple">ValueError<span>
+    </pre>
 
 compared to:
 
 >>> 8 |> h() |> g() |> f()
-
 
 .. raw:: html
 

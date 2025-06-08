@@ -7,9 +7,12 @@
 
 #include "pycore_walker.h"
 
-#define EXTRAS expr_context_ty ctx, AST_WALKER_CALLBACK callback, void *userdata
+#define EXTRAS void **target, expr_context_ty ctx, AST_WALKER_CALLBACK callback, void *userdata
 #define EXTRA_3 ctx, callback, userdata
 #define EXTRA_2 callback, userdata
+
+#define TARGET(x) (x), &(x)
+#define NO_TARGET(x) (x)
 
 #define CHECK_NULL(x) if ((x) == NULL) { return true; }
 
@@ -17,7 +20,7 @@ bool ast_walker_expr(expr_ty node, EXTRAS);
 
 static bool ast_walker_expr_seq(asdl_expr_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_expr(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_expr(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -27,20 +30,20 @@ static bool ast_walker_expr_seq(asdl_expr_seq *seq, EXTRAS) {
 static bool ast_walker_identifier(identifier id, EXTRAS) {
     CHECK_NULL(id);
     walk_node_ty walk_node = { .Identifier = id };
-    return callback(WalkIdentifier_kind, walk_node, ctx, userdata, CallbackSingle_kind);
+    return callback(WalkIdentifier_kind, walk_node, ctx, userdata, CallbackSingle_kind, target);
 }
 
 static bool ast_walker_arg(arg_ty arg, EXTRAS) {
     CHECK_NULL(arg);
     return (
-        ast_walker_identifier(arg->arg, EXTRA_3) &&
-        ast_walker_expr(arg->annotation, EXTRA_3)
+        ast_walker_identifier(TARGET(arg->arg), EXTRA_3) &&
+        ast_walker_expr(TARGET(arg->annotation), EXTRA_3)
     );
 }
 
 static bool ast_walker_arg_seq(asdl_arg_seq *seq, EXTRAS) {
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
-        if (!ast_walker_arg(asdl_seq_GET(seq, i), EXTRA_3)) {
+        if (!ast_walker_arg(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
         }
     }
@@ -50,13 +53,13 @@ static bool ast_walker_arg_seq(asdl_arg_seq *seq, EXTRAS) {
 bool ast_walker_arguments(arguments_ty args, EXTRAS) {
     CHECK_NULL(args);
     return (
-        ast_walker_arg_seq(args->posonlyargs, EXTRA_3) &&
-        ast_walker_arg_seq(args->args, EXTRA_3) &&
-        ast_walker_arg(args->vararg, EXTRA_3) &&
-        ast_walker_arg_seq(args->kwonlyargs, EXTRA_3) &&
-        ast_walker_expr_seq(args->kw_defaults, EXTRA_3) &&
-        ast_walker_arg(args->kwarg, EXTRA_3) &&
-        ast_walker_expr_seq(args->defaults, EXTRA_3) 
+        ast_walker_arg_seq(TARGET(args->posonlyargs), EXTRA_3) &&
+        ast_walker_arg_seq(TARGET(args->args), EXTRA_3) &&
+        ast_walker_arg(TARGET(args->vararg), EXTRA_3) &&
+        ast_walker_arg_seq(TARGET(args->kwonlyargs), EXTRA_3) &&
+        ast_walker_expr_seq(TARGET(args->kw_defaults), EXTRA_3) &&
+        ast_walker_arg(TARGET(args->kwarg), EXTRA_3) &&
+        ast_walker_expr_seq(TARGET(args->defaults), EXTRA_3) 
     );
 }
 

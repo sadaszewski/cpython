@@ -170,10 +170,118 @@ With regular operator overloading the long- and short-form would have to look li
 
 and any optional assignments of the intermediate values using the ``:=`` operator would not work as desired.
 
-Use case 2
-----------
+Use case 2 - clean syntax for layers in Deep Learning
+-----------------------------------------------------
 
-Lorem ipsum dolor sit amet
+Artificial neural networks feature many levels of organization. Finding a good balance between
+encapsulation and inlining is not always trivial. The pipeline expression would allow to more
+easily and intuitively organize the processing flow into informal "layers".
+
+Compare without the pipeline expression:
+
+.. code-block:: python
+
+    from torch import nn
+
+    class CNN(nn.Module):
+        def __init__(
+            self,
+            input_channels: int,
+            output_channels: int,
+            dropout: float,
+        ):
+            super(CNN, self).__init__()
+            self.conv0 = nn.Conv2d(input_channels, 16, kernel_size=3, padding=1)
+            self.bn0 = nn.BatchNorm2d(16)
+            self.conv1 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+            self.bn1 = nn.BatchNorm2d(32)
+            self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+            self.bn2 = nn.BatchNorm2d(64)
+            self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+            self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+
+            self.pool = nn.MaxPool2d(2, 2)
+
+            self.fc1 = nn.Linear(256 * 20 * 20, 256)
+            self.fc2 = nn.Linear(256, 128)
+            self.fc3 = nn.Linear(128, output_channels)
+
+            self.relu = nn.ReLU()
+            self.sigmoid = nn.Sigmoid()
+            self.dropout = nn.Dropout(dropout)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = self.pool(self.relu(self.bn0(self.conv0(x))))
+            x = self.pool(self.relu(self.bn1(self.conv1(x))))
+            x = self.pool(self.relu(self.bn2(self.conv2(x))))
+            x = self.pool(self.relu(self.conv3(x)))
+            x = self.pool(self.relu(self.conv4(x)))
+
+            x = x.view(-1, 256 * 20 * 20)
+            x = self.relu(self.fc1(x))
+            x = self.dropout(x)
+            x = self.relu(self.fc2(x))
+            x = self.dropout(x)
+            x = self.sigmoid(self.fc3(x))
+
+            return x
+
+and an alternative using the pipeline expression:
+
+.. code-block:: python
+
+    from torch import nn
+
+    class tee:
+        def __init__(self, value):
+            self.value = value
+        def __pipe__(self, rhs, rhs_noinject, last, name):
+            v = rhs_noinject(None)
+            if name is None:
+                raise ValueError('Named expressions must be used at all stages of tee()')
+            setattr(self.value, name, v)
+            return (self, v)
+
+    class CNN(nn.Module):
+        def __init__(
+            self,
+            input_channels: int,
+            output_channels: int,
+            dropout: float,
+        ):
+            super(CNN, self).__init__()
+            (tee(self)
+                |> (conv0 := nn.Conv2d(input_channels, 16, kernel_size=3, padding=1))
+                |> (bn0 := nn.BatchNorm2d(16))
+                |> (conv1 := nn.Conv2d(16, 32, kernel_size=3, padding=1))
+                |> (bn1 := nn.BatchNorm2d(32))
+                |> (conv2 := nn.Conv2d(32, 64, kernel_size=3, padding=1))
+                |> (bn2 := nn.BatchNorm2d(64))
+                |> (conv3 := nn.Conv2d(64, 128, kernel_size=3, padding=1))
+                |> (conv4 := nn.Conv2d(128, 256, kernel_size=3, padding=1))
+                |> (pool := nn.MaxPool2d(2, 2))
+                |> (fc1 := nn.Linear(256 * 20 * 20, 256))
+                |> (fc2 := nn.Linear(256, 128))
+                |> (fc3 := nn.Linear(128, output_channels))
+                |> (relu := nn.ReLU())
+                |> (sigmoid := nn.Sigmoid())
+                |> (dropout := nn.Dropout(dropout)))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            tail = |> self.relu() |> self.pool()
+            x = x |> self.conv0() |> self.bn0() |> tail()
+            x = x |> self.conv1() |> self.bn1() |> tail()
+            x = x |> self.conv2() |> self.bn2() |> tail()
+            x = x |> self.conv3() |> tail()
+            x = x |> self.conv4() |> tail()
+
+            x = x.view(-1, 256 * 20 * 20)
+            tail = |> self.relu() |> self.dropout()
+            x = x |> self.fc1() |> tail()
+            x = x |> self.fc2() |> tail()
+            x = x |> self.fc3() |> self.sigmoid()
+
+            return x
 
 Use case 3
 ----------

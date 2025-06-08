@@ -382,6 +382,31 @@ With an override of ``__pipe__()`` the following can be achieved:
         <span style="color: purple;">Exception: Exception while executing stage #3 (_3) of the pipeline</span>
     </pre>
 
+This approach could be further extended to place a "breakpoint" at any stage of the pipeline:
+
+.. code-block:: python
+
+    class DebugPipeline:
+        def __init__(self, value, breakpoint_at_stage = None, counter = 0):
+            self.value = value
+            self.breakpoint_at_stage = breakpoint_at_stage
+            self.counter = counter
+        def __pipe__(self, rhs, rhs_noinject, last, name):
+            if self.breakpoint_at_stage is not None and self.counter + 1 == self.breakpoint_at_stage:
+                import pdb
+                pdb.set_trace()
+            try:
+                v = rhs(self.value)
+                print(f"Result of stage #{self.counter + 1}{' (' + name + ')' if name else ''}: {v}")
+                return (DebugPipeline(v, self.breakpoint_at_stage, self.counter + 1), v)
+            except Exception as e:
+                msg = f"Exception while executing stage #{self.counter + 1}{' (' + name + ')' if name else ''} of the pipeline"
+                raise Exception(msg) from e
+
+>>> DebugPipeline(8, breakpoint_at_stage = 2) |> (_1 := h()) |> (_2 := g()) |> (_3 := f())
+
+The example above will result in starting a pdb prompt just before the execution of ``g()``.
+
 Use case 4
 ----------
 

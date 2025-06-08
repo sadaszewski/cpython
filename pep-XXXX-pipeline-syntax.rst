@@ -307,14 +307,6 @@ Given:
         return x * 2
 
 
-.. raw:: html
-
-    <style>
-        .red { color: red; font-family: monospace; }
-        .fixed { font-family: monospace; }
-        .purple { color: purple; }
-    </style>
-
 >>> f(g(h(8)))
 
 .. raw:: html
@@ -322,11 +314,11 @@ Given:
     <pre>
         Traceback (most recent call last):
         File "test_pipeline.py", line 14, in <module>
-            <span class="red">f(g(h(8)))</span>
-            <span class="red">~^^^^^^^^^</span>
+            <span style="color: red;">f(g(h(8)))</span>
+            <span style="color: red;">~^^^^^^^^^</span>
         File "test_pipeline.py", line 5, in f
             raise ValueError
-        <span class="purple">ValueError<span>
+        <span style="color: purple;">ValueError<span>
     </pre>
 
 compared to:
@@ -338,11 +330,11 @@ compared to:
     <pre>
         Traceback (most recent call last):
         File "test_pipeline.py", line 13, in <module>
-            8 |> h() |> g() |> <span class="red">f()</span>
-                               <span class="red">~^^</span>
+            8 |> h() |> g() |> <span style="color: red;">f()</span>
+                               <span style="color: red;">~^^</span>
         File "test_pipeline.py", line 5, in f
             raise ValueError
-        ValueError
+        <span style="color: purple;">ValueError</span>
     </pre>
 
 The latter is more readable out of the box and the error is more readily identifiable.
@@ -373,21 +365,21 @@ With an override of ``__pipe__()`` the following can be achieved:
         File "test_pipeline.py", line 9, in __pipe__
             v = rhs(self.value)
         File "test_pipeline.py", line 26, in <lambda>
-            DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := <span class="red">f()</span>)
-                                                                     <span class="red">~^^</span>
+            DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := <span style="color: red;">f()</span>)
+                                                                     <span style="color: red;">~^^</span>
         File "test_pipeline.py", line 18, in f
             raise ValueError
-        <span class="purple">ValueError</span>
+        <span style="color: purple;">ValueError</span>
 
         The above exception was the direct cause of the following exception:
 
         Traceback (most recent call last):
         File "test_pipeline.py", line 26, in <module>
-            DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := <span class="red">f()</span>)
-                                                                     <span class="red">~^^</span>
+            DebugPipeline(8) |> (_1 := h()) |> (_2 := g()) |> (_3 := <span style="color: red;">f()</span>)
+                                                                     <span style="color: red;">~^^</span>
         File "test_pipeline.py", line 14, in __pipe__
             raise Exception(msg) from e
-        <span class="purple">Exception: Exception while executing stage #3 (_3) of the pipeline</span>
+        <span style="color: purple;">Exception: Exception while executing stage #3 (_3) of the pipeline</span>
     </pre>
 
 Use case 4

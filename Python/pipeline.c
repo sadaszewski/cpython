@@ -105,6 +105,19 @@ static int transform_pipeline(expr_ty node, PyArena *arena) {
     }
 }
 
+static int transform_child_nodes(expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena) {
+    // only now transform the children
+    if (!ast_walker_expr(leftmost->v.Pipeline.left, Load, walk_replace_pipelines_callback, arena)) {
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        if (!ast_walker_expr(asdl_seq_GET(seq, i), Load, walk_replace_pipelines_callback, arena)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyArena *arena) {
     identifier placeholder = _PyUnicode_FromId(&PyID__);
     CHECK_NULL(placeholder);
@@ -135,7 +148,7 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
     PyObject *minus_one = PyLong_FromLong(-1);
     if (_PyArena_AddPyObject(arena, minus_one) < 0) {
         Py_DecRef(minus_one);
-        return -1;
+        return 0;
     }
     expr_ty minus_one_e = _PyAST_Constant(minus_one, NULL, EXTRAS(node), arena);
     CHECK_NULL(minus_one_e);
@@ -191,15 +204,6 @@ static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *are
 }
 
 static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena) {
-    if (!ast_walker_expr(leftmost->v.Pipeline.left, Load, walk_replace_pipelines_callback, arena)) {
-        return 0;
-    }
-    for (int i = 0; i < count; i++) {
-        if (!ast_walker_expr(asdl_seq_GET(seq, i), Load, walk_replace_pipelines_callback, arena)) {
-            return 0;
-        }
-    }
-
     identifier placeholder_id = _PyUnicode_FromId(&PyID__);
     CHECK_NULL(placeholder_id);
     expr_ty placeholder = _PyAST_Name(placeholder_id, Store, EXTRAS(node), arena);
@@ -237,6 +241,11 @@ static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr
     node->v.Subscript.ctx = Load;
     node->v.Subscript.value = tuple;
     node->v.Subscript.slice = minus_one_e;
+
+    // only now transform the child nodes
+    if (!transform_child_nodes(leftmost, seq, count, arena)) {
+        return 0;
+    }
 
     return 1;
 }
@@ -293,6 +302,19 @@ static bool placeholder_use_info_callback(
             if (!ast_walker_arguments(node.Expr->v.Lambda.args, Load, find_placeholder_callback, NULL)) {
                 search_track->shadowed--;
             }
+        }
+    }
+
+    if (
+        kind == WalkExpr_kind &&
+        node.Expr->kind == Pipeline_kind
+    ) {
+        if (cb_kind == CallbackEarly_kind) {
+            search_track->depth++;
+            search_track->shadowed++;
+        } else if (cb_kind == CallbackLate_kind) {
+            search_track->depth--;
+            search_track->shadowed--;
         }
     }
 
@@ -392,12 +414,21 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
         target_name = _PyAST_Constant(target->v.Name.id, NULL, EXTRAS(rhs), arena);
         CHECK_NULL(target_name);
     }
-    asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(4, arena);
+    PyObject *unparsed_o = _PyAST_ExprAsUnicode(rhs_orig);
+    CHECK_NULL(unparsed_o);
+    if (_PyArena_AddPyObject(arena, unparsed_o) < 0) {
+        Py_DecRef(unparsed_o);
+        return 0;
+    }
+    expr_ty unparsed_e = _PyAST_Constant(unparsed_o, NULL, EXTRAS(rhs), arena);
+    CHECK_NULL(unparsed_e);
+    asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(5, arena);
     CHECK_NULL(magic_args);
     asdl_seq_SET(magic_args, 0, lambda);
     asdl_seq_SET(magic_args, 1, lambda_noinject);
     asdl_seq_SET(magic_args, 2, last_e);
     asdl_seq_SET(magic_args, 3, target ? target_name : none);
+    asdl_seq_SET(magic_args, 4, unparsed_e);
     expr_ty call_magic_method = _PyAST_Attribute(placeholder_load, magic_id, Load, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
     call_magic_method = _PyAST_Call(call_magic_method, magic_args, NULL, EXTRAS(rhs), arena);

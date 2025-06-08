@@ -110,6 +110,7 @@ enum {
     PR_SHIFT,           /* '<<', '>>' */
     PR_ARITH,           /* '+', '-' */
     PR_TERM,            /* '*', '@', '/', '%', '//' */
+    PR_PIPELINE,        /* lhs |> rhs, |> rhs */
     PR_FACTOR,          /* unary '+', '-', '~' */
     PR_POWER,           /* '**' */
     PR_AWAIT,           /* 'await' */
@@ -840,12 +841,17 @@ append_named_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
     return 0;
 }
 
-static int append_ast_pipeline(_PyUnicodeWriter *writer, expr_ty e) {
+static int append_ast_pipeline(_PyUnicodeWriter *writer, expr_ty e, int level)
+{
+    APPEND_STR_IF(level > PR_TUPLE, "(");
     if (e->v.Pipeline.left != NULL) {
-        APPEND_EXPR(e->v.Pipeline.left, PR_AWAIT);
+        APPEND_EXPR(e->v.Pipeline.left, PR_PIPELINE);
+        APPEND_STR(" |> ");
+    } else {
+        APPEND_STR("|> ");
     }
-    APPEND_STR(" |> ");
-    APPEND_EXPR(e->v.Pipeline.right, PR_AWAIT);
+    APPEND_EXPR(e->v.Pipeline.right, PR_PIPELINE);
+    APPEND_STR_IF(level > PR_TUPLE, ")");
     return 0;
 }
 
@@ -916,7 +922,7 @@ append_ast_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
     case NamedExpr_kind:
         return append_named_expr(writer, e, level);
     case Pipeline_kind:
-        return append_ast_pipeline(writer, e);
+        return append_ast_pipeline(writer, e, level);
     case Intrinsic2_kind:
         PyErr_SetString(PyExc_SystemError, "Unparsing post-processed AST should not be done - cannot unparse Intrinsic2");
         return -1;

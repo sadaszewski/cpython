@@ -13,6 +13,9 @@
 
 #define TARGET(x) (x), ((void**) &(x))
 #define NO_TARGET(x) (x)
+#define FETCH_TARGET(dest) if (target) { \
+    (dest) = (*(target)); \
+}
 
 #define CHECK_NULL(x) if ((x) == NULL) { return true; }
 
@@ -108,6 +111,8 @@ bool ast_walker_expr(expr_ty node, EXTRAS) {
     if (!callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
+    FETCH_TARGET(node);
+    walk_node.Expr = node;
 
     bool res = true;
     switch (node->kind) {
@@ -448,6 +453,8 @@ bool ast_walker_stmt(stmt_ty node, EXTRAS) {
     if (!callback(WalkStmt_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
+    FETCH_TARGET(node);
+    walk_node.Stmt = node;
 
     bool res = true;
     switch (node->kind) {
@@ -631,6 +638,8 @@ bool ast_walker_mod(mod_ty mod, EXTRAS) {
     if (!callback(WalkMod_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
+    FETCH_TARGET(mod);
+    walk_node.Mod = mod;
 
     bool res = true;
     switch (mod->kind) {

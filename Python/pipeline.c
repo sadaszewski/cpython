@@ -21,6 +21,7 @@ static bool placeholder_use_info(expr_ty node, search_track_ty search_track);
 static bool leftmost_call_callback(walk_kind_ty, walk_node_ty, expr_context_ty, void*, callback_kind_ty, void**);
 static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *arena);
 static int handle_magic_method(expr_ty rhs, identifier placeholder_id, bool last, PyArena *arena);
+static expr_ty deep_copy_expr(expr_ty node, PyArena *arena);
 
 static bool leftmost_call_callback(
     walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
@@ -381,9 +382,8 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
         rhs = rhs->v.NamedExpr.value;
     }
 
-    expr_ty rhs_noinject = (expr_ty) _PyArena_Malloc(arena, sizeof(*rhs));
+    expr_ty rhs_noinject = deep_copy_expr(rhs, arena);
     CHECK_NULL(rhs_noinject);
-    memcpy(rhs_noinject, rhs, sizeof(*rhs));
 
     if (!handle_injection(rhs, placeholder_id, arena)) {
         return 0;
@@ -488,6 +488,8 @@ static bool deep_copy_expr_callback(
         kind == WalkExpr_kind &&
         cb_kind == CallbackEarly_kind
     ) {
+        // printf("Copying kind: %d\n", node.Expr->kind);
+
         expr_ty res = _PyArena_Malloc(arena, sizeof(*node.Expr));
         CHECK_NULL(res);
 

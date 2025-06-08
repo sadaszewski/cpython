@@ -106,7 +106,79 @@ intuitively think about and structure data transformations. This enhancement pro
 expressive, and maintainable, thereby fostering a cleaner and more efficient development experience in key 
 application domains.
 
+Use case 1 - None-aware access
+------------------------------
 
+`PEP 505 <https://peps.python.org/pep-0505/>`_ proposed ``None``-aware coalescing, member access and indexing
+operators but was deferred indefinitely.
+The pipeline expression could offer a reasonable alternative for the latter two functionalities of this use case
+without complicating the syntax with completely new elements.
+
+See below:
+
+.. code-block:: python
+
+    from types import SimpleNamespace
+
+    class NoneAware:
+        def __init__(self, value):
+            self.value = value
+
+        def __pipe__(self, rhs, rhs_noinject, last):
+            try:
+                v = rhs(self.value) if self.value is not None else None
+            except (KeyError, AttributeError, IndexError):
+                v = None
+            return (NoneAware(v), v)
+
+    data = [
+        { "a": { "b": { "c": 123 } } },
+        SimpleNamespace(a = { "b": { "c": [ 456] } })
+    ]
+
+    >>> NoneAware(data) |> _[0] |> _["a"] |> _["b"] |> _["c"]
+    123
+    >>> NoneAware(data) |> _[0] |> (_1 := _["a"]) |> (_2 := _["b"]) |> (_3 := _["x"])
+    None
+    >>> _1
+    { "b": { "c": 123 } }
+    >>> _2
+    { "c": 123 } 
+    >>> _3
+    None
+    >>> NoneAware(data) |> _[2]
+    None
+    >>> NoneAware(data) |> _[2] |> _.a |> _["b"] |> _["c"] |> _[0]
+    456
+
+This syntax is clear, well-spaced and uses familiar constructs. Individual steps are emphasized.
+Alternatively, the short form also works:
+
+.. code-block:: python
+
+    >>> NoneAware(data) |> _[1].a["b"]["x"][0]
+    None
+    >>> NoneAware(data) |> _[1].a["b"]["c"][0]
+    456
+
+With regular operator overloading the long- and short-form would have to look like this, respectively:
+
+.. code-block:: python
+
+    NoneAware(data) | (lambda _: _[1]) | (lambda _: _.a) | (lambda _: _["b"]) | (lambda _: _["c"]) | (lambda _: _[0])
+    NoneAware(data) | (lambda _: _[1].a["b"]["c"][0])
+
+and any optional assignments of the intermediate values using the ``:=`` operator would not work as desired.
+
+Use case 2
+----------
+
+Lorem ipsum dolor sit amet
+
+Use case 3
+----------
+
+Lorem ipsum dolor sit amet
 
 Rationale
 =========

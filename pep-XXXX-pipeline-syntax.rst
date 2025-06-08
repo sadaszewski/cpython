@@ -407,6 +407,16 @@ This approach could be further extended to place a "breakpoint" at any stage of 
 
 The example above will result in starting a pdb prompt just before the execution of ``g()``.
 
+Another example:
+
+>>> DebugPipeline('1 2 3 4 5') |> _.split() |> map(int) |> [ x + 1 for x in _ ] |> map(str) |> ", ".join()
+Result of stage #1: ['1', '2', '3', '4', '5']
+Result of stage #2: <map object at 0xdf4bc8>
+Result of stage #3: [2, 3, 4, 5, 6]
+Result of stage #4: <map object at 0x10ca888>
+Result of stage #5: 2, 3, 4, 5, 6
+'2, 3, 4, 5, 6'
+
 Use case 4
 ----------
 

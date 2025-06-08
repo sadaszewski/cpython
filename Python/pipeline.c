@@ -470,3 +470,39 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
 
     return 1;
 }
+
+#undef CHECK_NULL
+#define CHECK_NULL(x) if ((x) == NULL) { return false; }
+
+static bool deep_copy_expr_callback(
+    walk_kind_ty kind,
+    walk_node_ty node,
+    expr_context_ty ctx,
+    void *userdata,
+    callback_kind_ty cb_kind,
+    void **target
+) {
+    PyArena *arena = (PyArena*) userdata;
+
+    if (
+        kind == WalkExpr_kind &&
+        cb_kind == CallbackEarly_kind
+    ) {
+        expr_ty res = _PyArena_Malloc(arena, sizeof(*node.Expr));
+        CHECK_NULL(res);
+
+        memcpy(res, node.Expr, sizeof(*node.Expr));
+
+        *((expr_ty*) target) = res;
+    }
+
+    return true;
+}
+
+static expr_ty deep_copy_expr(expr_ty node, PyArena *arena) {
+    expr_ty res = NULL;
+    if (!ast_walker_expr(node, (void**) &res, Load, deep_copy_expr_callback, arena)) {
+        return NULL;
+    }
+    return res;
+}

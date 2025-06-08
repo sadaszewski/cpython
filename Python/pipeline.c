@@ -18,18 +18,18 @@ typedef struct _search_track {
 
 static void search_track_init(search_track_ty search_track);
 static bool placeholder_use_info(expr_ty node, search_track_ty search_track);
-static bool leftmost_call_callback(walk_kind_ty, walk_node_ty, expr_context_ty, void*, callback_kind_ty);
+static bool leftmost_call_callback(walk_kind_ty, walk_node_ty, expr_context_ty, void*, callback_kind_ty, void**);
 static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *arena);
 static int handle_magic_method(expr_ty rhs, identifier placeholder_id, bool last, PyArena *arena);
 
 static bool leftmost_call_callback(
     walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
-    void *found, callback_kind_ty cb_kind
+    void *found, callback_kind_ty cb_kind, void **target
 ) {
     if (cb_kind == CallbackEarly_kind && kind == WalkExpr_kind && node.Expr->kind == Call_kind) {
         *((expr_ty*) found) = node.Expr;
         walk_node_ty walk_node = { .Expr = node.Expr->v.Call.func };
-        ast_walker(WalkExpr_kind, walk_node, ctx, leftmost_call_callback, found);
+        ast_walker(WalkExpr_kind, walk_node, NULL, ctx, leftmost_call_callback, found);
         return false; // we look to the left manually
     }
 
@@ -42,7 +42,7 @@ static bool leftmost_call_callback(
 
 static expr_ty leftmost_call(expr_ty e, expr_ty c) {
     expr_ty found = NULL;
-    ast_walker_expr(e, Load, leftmost_call_callback, &found);
+    ast_walker_expr(e, NULL, Load, leftmost_call_callback, &found);
     return found;
 }
 
@@ -50,7 +50,7 @@ static int transform_pipeline(expr_ty node, PyArena *arena);
 
 static bool walk_replace_pipelines_callback(
     walk_kind_ty kind, walk_node_ty node, expr_context_ty ctx,
-    void *arena, callback_kind_ty cb_kind
+    void *arena, callback_kind_ty cb_kind, void **target
 ) {
     if (cb_kind == CallbackEarly_kind && kind == WalkExpr_kind && node.Expr->kind == Pipeline_kind) {
         transform_pipeline(node.Expr, arena);
@@ -59,7 +59,7 @@ static bool walk_replace_pipelines_callback(
 }
 
 int walk_replace_pipelines(mod_ty m, PyArena *arena) {
-    ast_walker_mod(m, Load, walk_replace_pipelines_callback, arena);
+    ast_walker_mod(m, NULL, Load, walk_replace_pipelines_callback, arena);
     return 1;
 }
 
@@ -107,11 +107,11 @@ static int transform_pipeline(expr_ty node, PyArena *arena) {
 
 static int transform_child_nodes(expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena) {
     // only now transform the children
-    if (!ast_walker_expr(leftmost->v.Pipeline.left, Load, walk_replace_pipelines_callback, arena)) {
+    if (!ast_walker_expr(leftmost->v.Pipeline.left, NULL, Load, walk_replace_pipelines_callback, arena)) {
         return 0;
     }
     for (int i = 0; i < count; i++) {
-        if (!ast_walker_expr(asdl_seq_GET(seq, i), Load, walk_replace_pipelines_callback, arena)) {
+        if (!ast_walker_expr(asdl_seq_GET(seq, i), NULL, Load, walk_replace_pipelines_callback, arena)) {
             return 0;
         }
     }
@@ -255,7 +255,8 @@ static bool find_placeholder_callback(
     walk_node_ty node,
     expr_context_ty ctx,
     void *userdata,
-    callback_kind_ty cb_kind
+    callback_kind_ty cb_kind,
+    void **target
 ) {
     if (
         cb_kind == CallbackSingle_kind &&
@@ -272,7 +273,8 @@ static bool placeholder_use_info_callback(
     walk_node_ty node,
     expr_context_ty ctx,
     void *userdata,
-    callback_kind_ty cb_kind
+    callback_kind_ty cb_kind,
+    void **target
 ) {
     search_track_ty search_track = (search_track_ty) userdata;
 
@@ -294,12 +296,12 @@ static bool placeholder_use_info_callback(
     ) {
         if (cb_kind == CallbackEarly_kind) {
             search_track->depth++;
-            if (!ast_walker_arguments(node.Expr->v.Lambda.args, Load, find_placeholder_callback, NULL)) {
+            if (!ast_walker_arguments(node.Expr->v.Lambda.args, NULL, Load, find_placeholder_callback, NULL)) {
                 search_track->shadowed++;
             }
         } else if (cb_kind == CallbackLate_kind) {
             search_track->depth--;
-            if (!ast_walker_arguments(node.Expr->v.Lambda.args, Load, find_placeholder_callback, NULL)) {
+            if (!ast_walker_arguments(node.Expr->v.Lambda.args, NULL, Load, find_placeholder_callback, NULL)) {
                 search_track->shadowed--;
             }
         }
@@ -351,7 +353,7 @@ static void search_track_init(search_track_ty search_track) {
 
 static bool placeholder_use_info(expr_ty node, search_track_ty search_track) {
     search_track_init(search_track);
-    return ast_walker_expr(node, Load, placeholder_use_info_callback, search_track);
+    return ast_walker_expr(node, NULL, Load, placeholder_use_info_callback, search_track);
 }
 
 static _Py_Identifier PyID_hasattr = { .string = "hasattr", .index = -1 };

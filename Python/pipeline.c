@@ -384,11 +384,20 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     CHECK_NULL(last_c);
     expr_ty last_e = _PyAST_Constant(last_c, NULL, EXTRAS(rhs), arena);
     CHECK_NULL(last_e);
-    asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(3, arena);
+    expr_ty none = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_NONE), NULL, EXTRAS(rhs), arena);
+    CHECK_NULL(none);
+    expr_ty target_name = NULL;
+    if (target != NULL) {
+        // printf("target->kind: %d\n", target->kind);
+        target_name = _PyAST_Constant(target->v.Name.id, NULL, EXTRAS(rhs), arena);
+        CHECK_NULL(target_name);
+    }
+    asdl_expr_seq *magic_args = _Py_asdl_expr_seq_new(4, arena);
     CHECK_NULL(magic_args);
     asdl_seq_SET(magic_args, 0, lambda);
     asdl_seq_SET(magic_args, 1, lambda_noinject);
     asdl_seq_SET(magic_args, 2, last_e);
+    asdl_seq_SET(magic_args, 3, target ? target_name : none);
     expr_ty call_magic_method = _PyAST_Attribute(placeholder_load, magic_id, Load, EXTRAS(rhs), arena);
     CHECK_NULL(call_magic_method);
     call_magic_method = _PyAST_Call(call_magic_method, magic_args, NULL, EXTRAS(rhs), arena);

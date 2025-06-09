@@ -11,7 +11,9 @@ typedef enum _walk_kind {
     WalkExpr_kind,
     WalkStmt_kind,
     WalkMod_kind,
-    WalkIdentifier_kind
+    WalkIdentifier_kind,
+    WalkAlloc_kind,
+    WalkPyObject_kind
 } walk_kind_ty;
 
 typedef union {
@@ -19,6 +21,13 @@ typedef union {
     stmt_ty Stmt;
     mod_ty Mod;
     identifier Identifier;
+    struct {
+        void *ptr;
+        Py_ssize_t size;
+    } Alloc;
+    struct {
+        PyObject *object;
+    } PyObject;
 } walk_node_ty;
 
 typedef enum _callback_kind {

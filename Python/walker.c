@@ -22,9 +22,40 @@
 #undef asdl_seq_GET
 #define asdl_seq_GET(S, I) ((S)->typed_elements[(I)])
 
+#define SEQ_ALLOC_CALLBACK(seq) { \
+    if (seq) { \
+        walk_node_ty alloc_node = { .Alloc = { .ptr = (seq), .size = (asdl_seq_LEN((seq)) - 1) * sizeof(void*) + sizeof(*(seq)) }}; \
+        if (!callback(WalkAlloc_kind, alloc_node, Load, userdata, CallbackSingle_kind, target)) { \
+            return false; \
+        } \
+        FETCH_TARGET((seq)); \
+    } \
+}
+
+#define ALLOC_CALLBACK(node) { \
+    if (node) { \
+        walk_node_ty alloc_node = { .Alloc = { .ptr = (node), .size = sizeof(*(node)) }}; \
+        if (!callback(WalkAlloc_kind, alloc_node, Load, userdata, CallbackSingle_kind, target)) { \
+            return false; \
+        } \
+        FETCH_TARGET((node)); \
+    } \
+}
+
+#define PYOBJECT_CALLBACK(node) { \
+    if (node) { \
+        walk_node_ty alloc_node = { .PyObject = { .object = (node) }}; \
+        if (!callback(WalkPyObject_kind, alloc_node, Load, userdata, CallbackSingle_kind, target)) { \
+            return false; \
+        } \
+        FETCH_TARGET(node); \
+    } \
+}
+
 bool ast_walker_expr(expr_ty node, EXTRAS);
 
 static bool ast_walker_expr_seq(asdl_expr_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_expr(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -34,12 +65,14 @@ static bool ast_walker_expr_seq(asdl_expr_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_identifier(identifier id, EXTRAS) {
+    PYOBJECT_CALLBACK(id);
     CHECK_NULL(id);
     walk_node_ty walk_node = { .Identifier = id };
     return callback(WalkIdentifier_kind, walk_node, ctx, userdata, CallbackSingle_kind, target);
 }
 
 static bool ast_walker_arg(arg_ty arg, EXTRAS) {
+    ALLOC_CALLBACK(arg);
     CHECK_NULL(arg);
     return (
         ast_walker_identifier(TARGET(arg->arg), EXTRA_3) &&
@@ -48,6 +81,7 @@ static bool ast_walker_arg(arg_ty arg, EXTRAS) {
 }
 
 static bool ast_walker_arg_seq(asdl_arg_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_arg(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -57,6 +91,7 @@ static bool ast_walker_arg_seq(asdl_arg_seq *seq, EXTRAS) {
 }
 
 bool ast_walker_arguments(arguments_ty args, EXTRAS) {
+    ALLOC_CALLBACK(args);
     CHECK_NULL(args);
     return (
         ast_walker_arg_seq(TARGET(args->posonlyargs), EXTRA_3) &&
@@ -70,6 +105,7 @@ bool ast_walker_arguments(arguments_ty args, EXTRAS) {
 }
 
 static bool ast_walker_compr(comprehension_ty compr, EXTRAS) {
+    ALLOC_CALLBACK(compr);
     CHECK_NULL(compr);
     return (
         ast_walker_expr(TARGET(compr->target), EXTRA_3) &&
@@ -79,6 +115,7 @@ static bool ast_walker_compr(comprehension_ty compr, EXTRAS) {
 }
 
 static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_compr(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -88,6 +125,7 @@ static bool ast_walker_compr_seq(asdl_comprehension_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_keyword(keyword_ty kw, EXTRAS) {
+    ALLOC_CALLBACK(kw);
     CHECK_NULL(kw);
     return (
         ast_walker_identifier(TARGET(kw->arg), EXTRA_3) &&
@@ -96,6 +134,7 @@ static bool ast_walker_keyword(keyword_ty kw, EXTRAS) {
 }
 
 static bool ast_walker_keyword_seq(asdl_keyword_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_keyword(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -105,14 +144,13 @@ static bool ast_walker_keyword_seq(asdl_keyword_seq *seq, EXTRAS) {
 }
 
 bool ast_walker_expr(expr_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
 
     walk_node_ty walk_node = { .Expr = node };
     if (!callback(WalkExpr_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
-    FETCH_TARGET(node);
-    walk_node.Expr = node;
 
     bool res = true;
     switch (node->kind) {
@@ -269,6 +307,7 @@ bool ast_walker_expr(expr_ty node, EXTRAS) {
 bool ast_walker_stmt(stmt_ty node, EXTRAS);
 
 static bool ast_walker_stmt_seq(asdl_stmt_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_stmt(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -278,6 +317,7 @@ static bool ast_walker_stmt_seq(asdl_stmt_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_type_param(type_param_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
     switch(node->kind) {
         case TypeVar_kind:
@@ -301,6 +341,7 @@ static bool ast_walker_type_param(type_param_ty node, EXTRAS) {
 }
 
 static bool ast_walker_type_param_seq(asdl_type_param_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_type_param(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -310,6 +351,7 @@ static bool ast_walker_type_param_seq(asdl_type_param_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_withitem(withitem_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
     return (
         ast_walker_expr(TARGET(node->context_expr), EXTRA_3) &&
@@ -318,6 +360,7 @@ static bool ast_walker_withitem(withitem_ty node, EXTRAS) {
 }
 
 static bool ast_walker_withitem_seq(asdl_withitem_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_withitem(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -329,6 +372,7 @@ static bool ast_walker_withitem_seq(asdl_withitem_seq *seq, EXTRAS) {
 static bool ast_walker_pattern(pattern_ty node, EXTRAS);
 
 static bool ast_walker_pattern_seq(asdl_pattern_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_pattern(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -338,6 +382,7 @@ static bool ast_walker_pattern_seq(asdl_pattern_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_identifier_seq(asdl_identifier_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_identifier(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -347,6 +392,7 @@ static bool ast_walker_identifier_seq(asdl_identifier_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_pattern(pattern_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
     switch(node->kind) {
         case MatchValue_kind:
@@ -390,6 +436,7 @@ static bool ast_walker_pattern(pattern_ty node, EXTRAS) {
 }
 
 static bool ast_walker_matchcase(match_case_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
     return (
         ast_walker_pattern(TARGET(node->pattern), EXTRA_3) &&
@@ -399,6 +446,7 @@ static bool ast_walker_matchcase(match_case_ty node, EXTRAS) {
 }
 
 static bool ast_walker_matchcase_seq(asdl_match_case_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_matchcase(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -408,6 +456,7 @@ static bool ast_walker_matchcase_seq(asdl_match_case_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_exc_handler(excepthandler_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
     switch(node->kind) {
         case ExceptHandler_kind:
@@ -421,6 +470,7 @@ static bool ast_walker_exc_handler(excepthandler_ty node, EXTRAS) {
 }
 
 static bool ast_walker_exc_handler_seq(asdl_excepthandler_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_exc_handler(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -430,6 +480,7 @@ static bool ast_walker_exc_handler_seq(asdl_excepthandler_seq *seq, EXTRAS) {
 }
 
 static bool ast_walker_alias(alias_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
     return (
         ast_walker_identifier(TARGET(node->name), EXTRA_3) &&
@@ -438,6 +489,7 @@ static bool ast_walker_alias(alias_ty node, EXTRAS) {
 }
 
 static bool ast_walker_alias_seq(asdl_alias_seq *seq, EXTRAS) {
+    SEQ_ALLOC_CALLBACK(seq);
     for (int i = 0; i < asdl_seq_LEN(seq); i++) {
         if (!ast_walker_alias(TARGET(asdl_seq_GET(seq, i)), EXTRA_3)) {
             return false;
@@ -447,14 +499,13 @@ static bool ast_walker_alias_seq(asdl_alias_seq *seq, EXTRAS) {
 }
 
 bool ast_walker_stmt(stmt_ty node, EXTRAS) {
+    ALLOC_CALLBACK(node);
     CHECK_NULL(node);
 
     walk_node_ty walk_node = { .Stmt = node };
     if (!callback(WalkStmt_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
-    FETCH_TARGET(node);
-    walk_node.Stmt = node;
 
     bool res = true;
     switch (node->kind) {
@@ -632,14 +683,13 @@ bool ast_walker_stmt(stmt_ty node, EXTRAS) {
 }
 
 bool ast_walker_mod(mod_ty mod, EXTRAS) {
+    ALLOC_CALLBACK(mod);
     CHECK_NULL(mod);
 
     walk_node_ty walk_node = { .Mod = mod };
     if (!callback(WalkMod_kind, walk_node, ctx, userdata, CallbackEarly_kind, target)) {
         return false;
     }
-    FETCH_TARGET(mod);
-    walk_node.Mod = mod;
 
     bool res = true;
     switch (mod->kind) {
@@ -681,6 +731,9 @@ bool ast_walker(walk_kind_ty kind, walk_node_ty node, EXTRAS) {
     case WalkIdentifier_kind:
         CHECK_NULL(node.Identifier);
         return ast_walker_identifier(TARGET(node.Identifier), EXTRA_3);
+    case WalkAlloc_kind:
+    case WalkPyObject_kind:
+        return false;
     }
     return true;
 }

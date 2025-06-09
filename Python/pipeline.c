@@ -485,17 +485,17 @@ static bool deep_copy_expr_callback(
     PyArena *arena = (PyArena*) userdata;
 
     if (
-        kind == WalkExpr_kind &&
-        cb_kind == CallbackEarly_kind
+        kind == WalkAlloc_kind &&
+        cb_kind == CallbackSingle_kind
     ) {
-        // printf("Copying kind: %d\n", node.Expr->kind);
+        // printf("Copying %lld bytes from 0x%08llX...\n", (long long) node.Alloc.size, (unsigned long long) node.Alloc.ptr);
 
-        expr_ty res = _PyArena_Malloc(arena, sizeof(*node.Expr));
+        expr_ty res = _PyArena_Malloc(arena, node.Alloc.size);
         CHECK_NULL(res);
 
-        memcpy(res, node.Expr, sizeof(*node.Expr));
+        memcpy(res, node.Alloc.ptr, node.Alloc.size);
 
-        *((expr_ty*) target) = res;
+        *target = res;
     }
 
     return true;

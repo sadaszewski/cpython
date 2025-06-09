@@ -457,12 +457,62 @@ expr='((a := [1, 2, 3]), (b := [4, 5, 6]), [x + y for x, y in zip(a, b)])'
 This is just a dummy demonstration but in more advanced scenarios one could envisage for example
 saving the unparsed source code to files or reparsing the expressions and performing AST modifications.
 
-Use case 5
+Use case 5 - SQL query builder
+------------------------------
+
+The ability to capture the right-hand side of a pipeline as unparsed code lends itself handily
+to the purpose of SQL query building. For example:
+
+.. code-block:: python
+
+    import ast
+
+    class SQL_Query:
+        def __init__(self, db):
+            self.db = db
+        def __pipe__(self, rhs, rhs_noinject, last, name, unparsed):
+            v = ast.parse(unparsed)
+            v = v.body[0].value
+            if not isinstance(v, ast.ListComp):
+                raise TypeError("Only list comprehensions are currently supported")
+            if not isinstance(v.elt, ast.Tuple):
+                raise TypeError("The element must be a tuple to represent a row")
+            if len(v.generators) != 1:
+                raise ValueError("There must be exactly one generator")
+            t = v.generators[0]
+            if not isinstance(t.iter, ast.Name):
+                raise ValueError("The generator iter must be the table name")
+            if not isinstance(t.target, ast.Name):
+                raise ValueError("The generator target must be the alias name")
+            if not all(isinstance(e, ast.Attribute) for e in v.elt.elts):
+                raise TypeError("All tuple elements must be attributes")
+            if not all(isinstance(e.value, ast.Name) for e in v.elt.elts):
+                raise TypeError("All attribute values must be names")
+            if not all(t.target.id == e.value.id for e in v.elt.elts):
+                raise ValueError("All attribute values must be the same as generator target")
+            query = [
+                "SELECT",
+                ", ".join(f"{e.value.id}.{e.attr}" for e in v.elt.elts),
+                "FROM",
+                f"{t.iter.id} AS {t.target.id}"
+            ]
+            query = " ".join(query)
+            return (self, query)
+            
+>>> x = SQL_Query(None) |> [ (x.id, x.title, x.modified_date) for x in blog_posts ]
+>>> print(x)
+SELECT x.id, x.title, x.modified_date FROM blog_posts AS x
+
+While this example is rudimentary, it illustrates a powerful approach which could, in its
+final form, translate most of the Python syntax into the corresponding SQL queries without
+the need to use strings.
+
+Use case 6
 ----------
 
 Lorem ipsum dolor sit amet
 
-Use case 6
+Use case 7
 ----------
 
 Lorem ipsum dolor sit amet

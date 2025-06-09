@@ -513,6 +513,17 @@ right-hand side evaluation, for example to make sure that blog_posts is an actua
 and that it contains the necessary fields. ORM APIs would need to be constructed to accomodate
 this type of use.
 
+A slightly more elaborate hypothetical example:
+
+.. code-block:: python
+
+    SQL_Query(None) |> [
+        (post.id, post.title, post.modified_date, user.display_name)
+        for post in blog_posts
+        for user in users
+        if post.user_id == user.id
+    ]
+
 Use case 6
 ----------
 

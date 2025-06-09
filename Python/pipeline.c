@@ -34,10 +34,6 @@ static bool leftmost_call_callback(
         return false; // we look to the left manually
     }
 
-    /* if (cb_kind == CallbackLate_kind && kind == WalkExpr_kind && node.Expr->kind == Call_kind) {
-        *((expr_ty*) found) = node.Expr;
-        return false;
-    }*/
     return true;
 }
 
@@ -64,16 +60,6 @@ int walk_replace_pipelines(mod_ty m, PyArena *arena) {
     return 1;
 }
 
-/*
-
-LHS |> RHS
-
-to:
-
-((_ := LHS), (lambda _: _)(RHS))[1]
-
-*/
-
 static _Py_Identifier PyID__ = { .string = "_", .index = -1 };
 
 #define CHECK_NULL(x) if ((x) == NULL) return 0;
@@ -98,16 +84,13 @@ static int transform_pipeline(expr_ty node, PyArena *arena) {
         tmp = tmp->v.Pipeline.left;
     }
     if (leftmost->v.Pipeline.left == NULL) {
-        // pipeline
         return transform_autolambda(node, seq, count, arena);
     } else {
-        // pipeline instance
         return transform_pipeline_instance(node, leftmost, seq, count, arena);
     }
 }
 
 static int transform_child_nodes(expr_ty leftmost, asdl_expr_seq *seq, int count, PyArena *arena) {
-    // only now transform the children
     if (!ast_walker_expr(leftmost->v.Pipeline.left, NULL, Load, walk_replace_pipelines_callback, arena)) {
         return 0;
     }
@@ -130,8 +113,6 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
     arguments_ty arguments = _PyAST_arguments(NULL, args, NULL, NULL, NULL, NULL, NULL, arena);
     CHECK_NULL(arguments);
 
-    //expr_ty placeholder_e = _PyAST_Name(placeholder, Store, EXTRAS(node), arena);
-    //CHECK_NULL(placeholder_e);
     asdl_expr_seq *elts = _Py_asdl_expr_seq_new(count, arena);
     CHECK_NULL(elts);
     for (int i = 0; i < count; i++) {
@@ -139,8 +120,6 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
         if (!handle_magic_method(e, placeholder, (i == count - 1), arena)) {
             return 0;
         }
-        //e = _PyAST_NamedExpr(placeholder_e, e, EXTRAS(node), arena);
-        //CHECK_NULL(e);
         asdl_seq_SET(elts, i, e);
     }
     expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(node), arena);
@@ -167,26 +146,16 @@ static int transform_autolambda(expr_ty node, asdl_expr_seq *seq, int count, PyA
 static int handle_injection(expr_ty rhs, identifier placeholder_id, PyArena *arena) {
     expr_ty rhs_leftmost_call = leftmost_call(rhs, NULL);
 
-    // Handle injection
     struct _search_track search_track;
     search_track_init(&search_track);
     if (rhs_leftmost_call != NULL) {
         placeholder_use_info(rhs_leftmost_call, &search_track);
-        /* printf(
-            "placeholder_use_info(), depth: %d, overwritten: %d, used: %d, shadowed: %d\n",
-            search_track.depth,
-            (int) search_track.overwritten,
-            (int) search_track.used,
-            (int) search_track.shadowed
-        ); */
     }
 
     if (
         !search_track.used
         && !search_track.overwritten
         && rhs_leftmost_call != NULL
-        /* && asdl_seq_LEN(rhs_leftmost_call->v.Call.args) == 0
-        && asdl_seq_LEN(rhs_leftmost_call->v.Call.keywords) == 0 */
     ) {
         asdl_expr_seq *old_args = rhs_leftmost_call->v.Call.args;
         int n = asdl_seq_LEN(old_args);
@@ -222,8 +191,6 @@ static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr
     CHECK_NULL(assignment);
     asdl_seq_SET(elts, 0, assignment);
     for (int i = 0; i < count; i++) {
-        //assignment = _PyAST_NamedExpr(placeholder, asdl_seq_GET(seq, i), EXTRAS(node), arena);
-        //CHECK_NULL(assignment);
         asdl_seq_SET(elts, i + 1, asdl_seq_GET(seq, i));
     }
     expr_ty tuple = _PyAST_Tuple(elts, Load, EXTRAS(node), arena);
@@ -278,18 +245,6 @@ static bool placeholder_use_info_callback(
     void **target
 ) {
     search_track_ty search_track = (search_track_ty) userdata;
-
-    /* printf(
-        "placeholder_use_info_callback(), kind: %d, node.Expr->kind: %d, ctx: %d, cb_kind: %d, depth: %d, overwritten: %d, used: %d, shadowed: %d\n",
-        (int) kind,
-        (int) node.Expr->kind,
-        (int) ctx,
-        (int) cb_kind,
-        (int) search_track->depth,
-        (int) search_track->overwritten,
-        (int) search_track->used,
-        (int) search_track->shadowed
-    ); */
 
     if (
         kind == WalkExpr_kind &&
@@ -420,7 +375,6 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     CHECK_NULL(none);
     expr_ty target_name = NULL;
     if (target != NULL) {
-        // printf("target->kind: %d\n", target->kind);
         target_name = _PyAST_Constant(target->v.Name.id, NULL, EXTRAS(rhs), arena);
         CHECK_NULL(target_name);
     }
@@ -438,7 +392,6 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     expr_ty placeholder_store = _PyAST_Name(placeholder_id, Store, EXTRAS(rhs), arena);
     CHECK_NULL(placeholder_store);
     call_magic_method = _PyAST_NamedExpr(placeholder_store, call_magic_method, EXTRAS(rhs), arena);
-    // (_1 := (_ := magic())[1], (_ := _[0]))[1]
     expr_ty one = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ONE), NULL, EXTRAS(rhs), arena);
     CHECK_NULL(one);
     expr_ty zero = _PyAST_Constant(Py_GetConstant(Py_CONSTANT_ZERO), NULL, EXTRAS(rhs), arena);
@@ -488,13 +441,9 @@ static bool deep_copy_expr_callback(
         kind == WalkAlloc_kind &&
         cb_kind == CallbackSingle_kind
     ) {
-        // printf("Copying %lld bytes from 0x%08llX...\n", (long long) node.Alloc.size, (unsigned long long) node.Alloc.ptr);
-
         expr_ty res = _PyArena_Malloc(arena, node.Alloc.size);
         CHECK_NULL(res);
-
         memcpy(res, node.Alloc.ptr, node.Alloc.size);
-
         *target = res;
     }
 

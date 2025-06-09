@@ -505,7 +505,13 @@ SELECT x.id, x.title, x.modified_date FROM blog_posts AS x
 
 While this example is rudimentary, it illustrates a powerful approach which could, in its
 final form, translate most of the Python syntax into the corresponding SQL queries without
-the need to use strings.
+the need to use strings. Furthermore, this technique grants a degree of correctness verification
+at parse time, as opposed to at runtime - without resorting to any workarounds like storing
+the queries in module-level variables, "registering" at module-parsing time, etc.
+Another layer of checks could be added combining both the unparsed expression and
+right-hand side evaluation, for example to make sure that blog_posts is an actual table
+and that it contains the necessary fields. ORM APIs would need to be constructed to accomodate
+this type of use.
 
 Use case 6
 ----------

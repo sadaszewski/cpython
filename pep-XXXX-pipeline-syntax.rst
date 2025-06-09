@@ -524,12 +524,89 @@ A slightly more elaborate hypothetical example:
         if post.user_id == user.id
     ]
 
-Use case 6
+Use case 6 - extract members into local scope
+---------------------------------------------
+
+Setting members of ``self`` and locals with the same name to the same value in the constructor is a common
+situation. ``tee()`` demonstrated in use case 2 can achieve that. Extracting members to local scope in 
+regular methods is another common use case. So is updating attributes with local values before the method
+exits. Both can be easily achieved by combining the unparsed expression and right-hand side evaluation
+capabilities of the ``__pipe()`` magic method
+
+.. code-block:: python
+
+    import ast
+    import inspect
+
+    class extract:
+        def __init__(self, value):
+            self.value = value
+        def __pipe__(self, rhs, rhs_noinject, last, name, unparsed):
+            t = ast.parse(unparsed)
+            t = t.body[0].value
+            if not isinstance(t, ast.Tuple):
+                raise TypeError("Right-hand side must be a tuple")
+            f = inspect.currentframe().f_back
+            res = []
+            for e in t.elts:
+                if not isinstance(e, ast.Name):
+                    raise TypeError("All tuple elements must be names")
+                v = getattr(self.value, e.id)
+                f.f_locals[e.id] = v
+                res.append(v)
+            return (self, tuple(res))
+
+    class update:
+        def __init__(self, value):
+            self.value = value
+        def __pipe__(self, rhs, rhs_noinject, last, name, unparsed):
+            t = ast.parse(unparsed)
+            t = t.body[0].value
+            if not isinstance(t, ast.Tuple):
+                raise TypeError("Right-hand side must be a tuple")
+            value = rhs_noinject(None)
+            for e, v in zip(t.elts, value):
+                if not isinstance(e, ast.Name):
+                    raise TypeError("All tuple elements must be names")
+                setattr(self.value, e.id, v)
+            return (self, value)
+
+    class AClass:
+        def __init__(self, a = 1, b = 2, c = 3, d = 4, e = 5):
+            update(self) |> (a, b, c, d, e)
+        def modify(self):
+            a, b, c, d, e = (None,) * 5
+            extract(self) |> (a, b, c, d, e)
+            a += 1
+            b += 2
+            c += 3
+            d += 4
+            e += 5
+            update(self) |> (a, b, c, d, e)
+        def get(self):
+            a, b, c, d, e = (None,) * 5
+            extract(self) |> (a, b, c, d, e)
+            return (a, b, c, d, e)
+
+>>> a = AClass()
+>>> a.get()
+(1, 2, 3, 4, 5)
+>>> a.modify()
+>>> a.get()
+(2, 4, 6, 8, 10)
+>>> a.modify()
+>>> a.get()
+(3, 6, 9, 12, 15)
+
+This approach addresses the common use pattern of mapping an attribute to a local variable and back.
+Such a scenario is currently burdened by the need of repetitive and excessive use of ``self``.
+
+Use case 7
 ----------
 
 Lorem ipsum dolor sit amet
 
-Use case 7
+Use case 8
 ----------
 
 Lorem ipsum dolor sit amet

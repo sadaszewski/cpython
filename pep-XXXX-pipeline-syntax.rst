@@ -601,12 +601,75 @@ capabilities of the ``__pipe()`` magic method
 This approach addresses the common use pattern of mapping an attribute to a local variable and back.
 Such a scenario is currently burdened by the need of repetitive and excessive use of ``self``.
 
-Use case 7
+Use case 7 - Method Cascades
+----------------------------
+
+When methods return ``None``, method chaining is not possible. Although not significantly different than:
+
+.. code-block:: python
+
+    _ = an_object
+    _.method_a()
+    _.method_b()
+    _.method_c()
+
+or ``(_ := an_object, _.method_a(), _.method_b(), _.method_c())``
+
+the pipeline versions:
+
+``MethodCascade(an_object) |> _.method_a() |> _.method_b() |> _.method_c()``
+
+or
+
+``MethodCascade(an_object) |> method_a() |> method_b() |> method_c()``
+
+offer advantages by eliminating the need to use tuple while allowing to
+contain the expression in a single line.
+
+Additionally, the first form is more explicit through the use of the
+``MethodCascade`` LHS utility.
+
+The second form does the same but then is more implicit on the
+following right-hand sides which might be desirable given the
+abundant explicitness of the LHS.
+
+The second form would need to resort to using the unparsed RHS and AST
+manipulation to achieve this level of change in behavior.
+
+With that said, ``MethodCascade`` could be implemented using the existing
+functionality to allow method chaining, e.g.:
+
+.. code-block:: python
+    
+    class MethodCascade:
+        def __init__(self, value):
+            self.__value = value
+        def __getattr__(self, name):
+            v = getattr(self.__value, name)
+            if callable(v):
+                def inner(*args, **kwargs):
+                    v(*args, **kwargs)
+                    return self
+                return inner
+            else:
+                return v
+
+>>> x = [1, 2, 3, 4, 5]
+>>> MethodCascade(x).append(6).pop(0)
+<__main__.MethodCascade object at 0x10cda38>
+>>> x
+[2, 3, 4, 5, 6]
+
+We must conclude, that the advantage of using the pipeline syntax in this
+case would be limited to having certain syntax consistency for all
+the things related to "chaining".
+
+Use case 8
 ----------
 
 Lorem ipsum dolor sit amet
 
-Use case 8
+Use case 9
 ----------
 
 Lorem ipsum dolor sit amet

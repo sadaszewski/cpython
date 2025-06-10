@@ -675,6 +675,46 @@ depending on a condition). For example:
 
     x |> (_ ** 2 if _ <= 10 else (_ |> (_ + 1) |> _ ** 3 |> (_ / 2)))
 
+or more realistically:
+
+.. code-block:: python
+    
+    x |> (
+    (
+        _["content"] |> [ x["text"] for x in _ if "text" in x ] |> _[0]
+        if len(_) > 0
+            else None
+    ) if isinstance(_.get("content"), list) else
+        (
+        _["content"] 
+        ) if isinstance(_.get("content"), str) else
+        None
+    )
+
+It should be more flexible than ``match..case``, for example for
+matching items in the middle of a list. More importantly it can be nicely
+decomposed:
+
+.. code-block:: python
+
+    handle_list = |> (
+        _["content"] |> [ x["text"] for x in _ if "text" in x ] |> _[0]
+        if len(_) > 0
+            else None
+    )
+    handle_str = |> _["content"]
+
+    x = {'content': [{'text': 'foo'}]} 
+
+    res = x |> (
+        handle_list(_) if isinstance(_.get("content"), list) else
+        handle_str(_) if isinstance(_.get("content"), str) else
+        None
+    )
+
+>>> res
+'foo'
+
 Use case 9
 ----------
 

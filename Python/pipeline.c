@@ -215,6 +215,14 @@ static int transform_pipeline_instance(expr_ty node, expr_ty leftmost, asdl_expr
         return 0;
     }
 
+#if DEBUG_PIPELINE
+    PyObject *unparsed = _PyAST_ExprAsUnicode(node);
+    CHECK_NULL(unparsed);
+    PyObject_Print(unparsed, stdout, 0);
+    Py_DECREF(unparsed);
+    fprintf(stdout, "\n");
+#endif
+
     return 1;
 }
 
@@ -415,11 +423,13 @@ static int handle_magic_method(expr_ty rhs_orig, identifier placeholder_id, bool
     CHECK_NULL(tuple);
     tuple = _PyAST_Subscript(tuple, one, Load, EXTRAS(rhs), arena);
     CHECK_NULL(tuple);
+    expr_ty named_rhs = _PyAST_NamedExpr(placeholder_store, rhs, EXTRAS(rhs), arena);
+    CHECK_NULL(named_rhs);
 
     rhs_orig->kind = IfExp_kind;
     rhs_orig->v.IfExp.test = check_for_magic_method;
     rhs_orig->v.IfExp.body = tuple;
-    rhs_orig->v.IfExp.orelse = rhs;
+    rhs_orig->v.IfExp.orelse = named_rhs;
 
     return 1;
 }

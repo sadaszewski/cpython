@@ -855,6 +855,25 @@ static int append_ast_pipeline(_PyUnicodeWriter *writer, expr_ty e, int level)
     return 0;
 }
 
+#if DEBUG_PIPELINE
+static int append_ast_intrinsic2(_PyUnicodeWriter *writer, expr_ty e, int level)
+{
+    APPEND_STR("Intrinsic2(");
+    PyObject *index = PyLong_FromLong(e->v.Intrinsic2.index);
+    if (index == NULL) {
+        return -1;
+    }
+    append_repr(writer, index);
+    Py_DECREF(index);
+    APPEND_STR(", ");
+    APPEND_EXPR(e->v.Intrinsic2.arg1, PR_ATOM);
+    APPEND_STR(", ");
+    APPEND_EXPR(e->v.Intrinsic2.arg2, PR_ATOM);
+    APPEND_STR(")");
+    return 0;
+}
+#endif
+
 static int
 append_ast_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
 {
@@ -924,8 +943,12 @@ append_ast_expr(_PyUnicodeWriter *writer, expr_ty e, int level)
     case Pipeline_kind:
         return append_ast_pipeline(writer, e, level);
     case Intrinsic2_kind:
+#if DEBUG_PIPELINE
+        return append_ast_intrinsic2(writer, e, level);
+#else
         PyErr_SetString(PyExc_SystemError, "Unparsing post-processed AST should not be done - cannot unparse Intrinsic2");
         return -1;
+#endif
     // No default so compiler emits a warning for unhandled cases
     }
     PyErr_SetString(PyExc_SystemError,

@@ -664,15 +664,26 @@ We must conclude, that the advantage of using the pipeline syntax in this
 case would be limited to having certain syntax consistency for all
 the things related to "chaining".
 
-Use case 8
-----------
+Use case 8 - conditional expressions in pipelines
+-------------------------------------------------
 
-Lorem ipsum dolor sit amet
+A native pipeline syntax is uniquely suitable for building conditional
+pipelines and/or pipelines that can short-circuit (i.e. terminate early
+depending on a condition). For example:
+
+.. code-block:: python
+
+    x |> (_ ** 2 if _ <= 10 else (_ |> (_ + 1) |> _ ** 3 |> (_ / 2)))
 
 Use case 9
 ----------
 
 Lorem ipsum dolor sit amet
+
+Use case 10
+-----------
+
+Lorem ipsum dolor sit amet.
 
 Rationale
 =========
